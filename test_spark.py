@@ -1,4 +1,5 @@
 import logging
+import numpy as np
 import unittest
 
 from pyspark.sql import SparkSession
@@ -40,3 +41,8 @@ class TestSpark(unittest.TestCase):
         s = X.shape
         rdd = spark.to_rdd(self.sc, X, (s[0], 4, s[2])) # chunk on second axis
         print(rdd.collect())
+
+    def test_init_current_graph(self):
+        data = np.array([[-1, -1], [-2, -1], [-3, -2], [1, 1], [2, 1], [3, 2]])
+        current_graph = spark.init_current_graph(data, 2, np.random)
+        print(current_graph)
