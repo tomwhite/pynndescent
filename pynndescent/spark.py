@@ -99,6 +99,8 @@ def build_candidates(sc, current_graph, n_vertices, n_neighbors, max_candidates,
                         current_graph_part[2, i, j] = 0
 
         # print("new_candidate_neighbors part", new_candidate_neighbors)
+        # TODO: emit (index, new_candidate_neighbors) pairs, then we can reduceByKey, where merge_heaps is the reduce operation
+        # TODO: may want to have (index, new_candidate_neighbors, old_candidate_neighbors)
         return new_candidate_neighbors
     all_new_candidate_neighbors = current_graph_rdd.map(f).collect()
     print("all_new_candidate_neighbors", all_new_candidate_neighbors)
