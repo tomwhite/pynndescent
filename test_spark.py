@@ -37,5 +37,6 @@ class TestSpark(unittest.TestCase):
 
     def test_1(self):
         X = utils.make_heap(6, 2)
-        lr = spark.to_local_rows(self.sc, X, (3, 4, 2)) # chunk on second axis
-        print(lr)
+        s = X.shape
+        rdd = spark.to_rdd(self.sc, X, (s[0], 4, s[2])) # chunk on second axis
+        print(rdd.collect())
