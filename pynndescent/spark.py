@@ -42,12 +42,14 @@ def to_local_rows(sc, arr, chunks):
     func, chunk_indices = read_chunks(arr, chunks)
     return [func(i) for i in chunk_indices]
 
+def get_rng_state(random_state):
+    random_state = check_random_state(random_state)
+    return random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+
 def init_current_graph(data, n_neighbors, random_state):
     dist = distances.named_distances['euclidean']
 
-    random_state = check_random_state(random_state)
-    rng_state = \
-        random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+    rng_state = get_rng_state(random_state)
 
     current_graph = make_heap(data.shape[0], n_neighbors)
     # for each row i
@@ -63,5 +65,54 @@ def init_current_graph(data, n_neighbors, random_state):
 
     return current_graph
 
-def build_candidates():
-    pass
+def build_candidates(sc, current_graph, n_vertices, n_neighbors, max_candidates,
+                     rng_state, rho=0.5):
+    # spark version
+    s = current_graph.shape
+    current_graph_rdd = to_rdd(sc, current_graph, (s[0], 4, s[2]))
+
+    def f(current_graph_part):
+        print("current_graph_part", current_graph_part)
+
+        # each part has its own heaps for old and new candidates
+        # (TODO: consider making these sparse?)
+        new_candidate_neighbors = make_heap(n_vertices, max_candidates)
+        old_candidate_neighbors = make_heap(n_vertices, max_candidates)
+        n_vertices_part = current_graph_part.shape[1]
+        for i in range(n_vertices_part):
+            for j in range(n_neighbors):
+                if current_graph_part[0, i, j] < 0:
+                    continue
+                idx = current_graph_part[0, i, j]
+                isn = current_graph_part[2, i, j]
+                d = tau_rand(rng_state)
+                if tau_rand(rng_state) < rho:
+                    c = 0
+                    if isn:
+                        c += heap_push(new_candidate_neighbors, i, d, idx, isn)
+                        c += heap_push(new_candidate_neighbors, idx, d, i, isn)
+                    else:
+                        heap_push(old_candidate_neighbors, i, d, idx, isn)
+                        heap_push(old_candidate_neighbors, idx, d, i, isn)
+
+                    if c > 0 :
+                        current_graph_part[2, i, j] = 0
+
+        # print("new_candidate_neighbors part", new_candidate_neighbors)
+        return new_candidate_neighbors
+    all_new_candidate_neighbors = current_graph_rdd.map(f).collect()
+    print("all_new_candidate_neighbors", all_new_candidate_neighbors)
+
+    merged_new_candidate_neighbors = merge_heaps(all_new_candidate_neighbors[0], all_new_candidate_neighbors[1])
+    print("merged_new_candidate_neighbors", merged_new_candidate_neighbors)
+
+def merge_heaps(heap1, heap2):
+    # TODO: check heaps have the same size
+    s = heap2.shape
+    for row in range(s[1]):
+        for ind in range(s[2]): # TODO: reverse to make more efficient
+            index = heap2[0, row, ind]
+            weight = heap2[1, row, ind]
+            flag = heap2[2, row, ind]
+            heap_push(heap1, row, weight, index, flag)
+    return heap1

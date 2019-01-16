@@ -18,7 +18,7 @@ class TestSpark(unittest.TestCase):
     @classmethod
     def create_testing_pyspark_session(cls):
         return (
-            SparkSession.builder.master("local[2]")
+            SparkSession.builder.master("local[1]")
             .appName("my-local-testing-pyspark-context")
             .getOrCreate()
         )
@@ -44,5 +44,16 @@ class TestSpark(unittest.TestCase):
 
     def test_init_current_graph(self):
         data = np.array([[-1, -1], [-2, -1], [-3, -2], [1, 1], [2, 1], [3, 2]])
-        current_graph = spark.init_current_graph(data, 2, np.random)
+        current_graph = spark.init_current_graph(data, 2, random_state=42)
         print(current_graph)
+
+    def test_build_candidates(self):
+        data = np.array([[-1, -1], [-2, -1], [-3, -2], [1, 1], [2, 1], [3, 2]])
+        current_graph = spark.init_current_graph(data, 2, random_state=42)
+        new_candidate_neighbors, old_candidate_neighbors = utils.build_candidates(current_graph, current_graph.shape[1], 2, 9, spark.get_rng_state(42))
+
+        print(new_candidate_neighbors)
+        print(old_candidate_neighbors)
+
+        print("spark!")
+        spark.build_candidates(self.sc, current_graph, current_graph.shape[1], 2, 9, spark.get_rng_state(42))
