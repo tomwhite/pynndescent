@@ -50,10 +50,10 @@ class TestSpark(unittest.TestCase):
     def test_build_candidates(self):
         data = np.array([[-1, -1], [-2, -1], [-3, -2], [1, 1], [2, 1], [3, 2]])
         current_graph = spark.init_current_graph(data, 2, random_state=42)
-        new_candidate_neighbors, old_candidate_neighbors = utils.build_candidates(current_graph, current_graph.shape[1], 2, 9, spark.get_rng_state(42))
+        new_candidate_neighbors, old_candidate_neighbors = utils.build_candidates(current_graph, current_graph.shape[1], 2, 8, spark.get_rng_state(42))
 
         print(new_candidate_neighbors)
         print(old_candidate_neighbors)
 
         print("spark!")
-        spark.build_candidates(self.sc, current_graph, current_graph.shape[1], 2, 9, spark.get_rng_state(42))
+        spark.build_candidates(self.sc, current_graph, current_graph.shape[1], 2, 8, spark.get_rng_state(42))
