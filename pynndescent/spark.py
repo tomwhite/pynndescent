@@ -78,7 +78,7 @@ def build_candidates(sc, current_graph, n_vertices, n_neighbors, max_candidates,
         for current_graph_part in iterator:
             n_vertices_part = current_graph_part.shape[1]
             # each part has its own heaps for old and new candidates
-            # (TODO: consider making these sparse?)
+            # (TODO: make these sparse - use COO (or maybe LIL) to construct, then convert to CSR to slice)
             new_candidate_neighbors = make_heap(n_vertices, max_candidates)
             old_candidate_neighbors = make_heap(n_vertices, max_candidates)
             for i in range(n_vertices_part):
