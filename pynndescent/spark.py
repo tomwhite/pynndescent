@@ -70,7 +70,8 @@ def build_candidates(sc, current_graph, n_vertices, n_neighbors, max_candidates,
                      rng_state, rho=0.5):
     # spark version
     s = current_graph.shape
-    current_graph_rdd = to_rdd(sc, current_graph, (s[0], 4, s[2]))
+    chunk_size = 4
+    current_graph_rdd = to_rdd(sc, current_graph, (s[0], chunk_size, s[2]))
 
     def f2(index, iterator):
         for current_graph_part in iterator:
@@ -81,7 +82,7 @@ def build_candidates(sc, current_graph, n_vertices, n_neighbors, max_candidates,
             new_candidate_neighbors = make_heap(n_vertices, max_candidates)
             old_candidate_neighbors = make_heap(n_vertices, max_candidates)
             n_vertices_part = current_graph_part.shape[1]
-            offset = index * n_vertices_part
+            offset = index * chunk_size
             for i in range(n_vertices_part):
                 iabs = i + offset
                 r = np.random.RandomState()
