@@ -133,19 +133,12 @@ def make_nn_descent(dist, dist_args):
         n_vertices = data.shape[0]
 
         current_graph = make_heap(data.shape[0], n_neighbors)
-        print(current_graph.shape)
-        print(current_graph)
-        # for each row i
         for i in range(data.shape[0]):
-            # choose K rows from the whole matrix
             indices = rejection_sample(n_neighbors, data.shape[0], rng_state)
-            # and work out the dist from row i to each of the random K rows
             for j in range(indices.shape[0]):
                 d = dist(data[i], data[indices[j]], *dist_args)
                 heap_push(current_graph, i, d, indices[j], 1)
                 heap_push(current_graph, indices[j], d, i, 1)
-        print(current_graph.shape)
-        print(current_graph)
 
         if rp_tree_init:
             for n in range(leaf_array.shape[0]):
@@ -177,17 +170,6 @@ def make_nn_descent(dist, dist_args):
                                                          max_candidates,
                                                          rng_state, rho)
 
-            print("n_neighbors", n_neighbors)
-            print("n_vertices", n_vertices)
-            print("max_candidates", max_candidates)
-            print("new_candidate_neighbors[0]")
-            print(new_candidate_neighbors[0])
-            print("new_candidate_neighbors[1]")
-            print(new_candidate_neighbors[1])
-            print("new_candidate_neighbors[2]")
-            print(new_candidate_neighbors[2])
-            print("old_candidate_neighbors")
-            print(old_candidate_neighbors)
             c = 0
             for i in range(n_vertices):
                 for j in range(max_candidates):
@@ -507,7 +489,7 @@ class NNDescent(object):
             self._angular_trees = False
 
         self.rng_state = \
-            self.random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+            random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
         indices = np.arange(data.shape[0])
 
@@ -536,7 +518,6 @@ class NNDescent(object):
 
         if algorithm == 'standard' or leaf_array.shape[0] == 1:
             nn_descent = make_nn_descent(self._distance_func, self._dist_args)
-            print(nn_descent)
             self._neighbor_graph = nn_descent(self._raw_data,
                                               self.n_neighbors,
                                               self.rng_state,
@@ -566,7 +547,6 @@ class NNDescent(object):
         else:
             raise ValueError('Unknown algorithm selected')
 
-        print(self._neighbor_graph[0].shape)
         self._search_graph = lil_matrix((data.shape[0], data.shape[0]),
                                         dtype=np.float32)
         self._search_graph.rows = self._neighbor_graph[0]
