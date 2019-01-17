@@ -87,13 +87,16 @@ def init_current_graph(data, n_neighbors, random_state):
 
     return current_graph
 
-# spark version
-def build_candidates(sc, current_graph, n_vertices, n_neighbors, max_candidates,
-                     rng_state, rho=0.5):
+def init_current_graph_rdd(sc, data, n_neighbors, random_state):
+    current_graph = init_current_graph(data, n_neighbors, random_state)
     s = current_graph.shape
     chunk_size = 4
     current_graph_rdd = to_rdd(sc, current_graph, (s[0], chunk_size, s[2]))
+    return current_graph_rdd
 
+def build_candidates_rdd(sc, current_graph_rdd, n_vertices, n_neighbors, max_candidates,
+                     rng_state, rho=0.5):
+    chunk_size = 4
     candidate_chunks = (3, chunk_size, max_candidates) # 3 is first heap dimension
 
     def build_candidates_for_each_part(index, iterator):
@@ -137,8 +140,14 @@ def build_candidates(sc, current_graph, n_vertices, n_neighbors, max_candidates,
     candidate_neighbors_combined = current_graph_rdd\
         .mapPartitionsWithIndex(build_candidates_for_each_part)\
         .reduceByKey(merge_heap_pairs)\
-        .values()\
-        .collect()
+        .values()
+
+    return candidate_neighbors_combined
+
+
+def build_candidates(sc, current_graph_rdd, n_vertices, n_neighbors, max_candidates,
+                     rng_state, rho=0.5):
+    candidate_neighbors_combined = build_candidates_rdd(sc, current_graph_rdd, n_vertices, n_neighbors, max_candidates, rng_state, rho).collect()
 
     # stack results (this should really be materialized to a store, e.g. as Zarr)
     new_candidate_neighbors_combined = np.hstack([pair[0] for pair in candidate_neighbors_combined])
@@ -151,12 +160,12 @@ def nn_descent(sc, data, n_neighbors, rng_state, max_candidates=50,
                rp_tree_init=False, leaf_array=None, verbose=False):
     n_vertices = data.shape[0]
 
-    current_graph = init_current_graph(data, n_neighbors, rng_state)
+    current_graph_rdd = init_current_graph_rdd(sc, data, n_neighbors, rng_state)
 
     for n in range(n_iters):
 
         (new_candidate_neighbors,
-         old_candidate_neighbors) = build_candidates(sc, current_graph,
+         old_candidate_neighbors) = build_candidates(sc, current_graph_rdd,
                                                      n_vertices,
                                                      n_neighbors,
                                                      max_candidates,
