@@ -211,10 +211,15 @@ def nn_descent(sc, data, n_neighbors, rng_state, max_candidates=50,
                 for i, chunk_index in enumerate(chunk_indices):
                     yield i, read_chunk_func_new(chunk_index)
 
-        current_graph_rdd = candidate_neighbors_combined\
+        current_graph_rdd_updates = candidate_neighbors_combined\
             .mapPartitionsWithIndex(nn_descent_for_each_part)\
             .reduceByKey(merge_heaps)\
             .values()
+
+        # merge the updates into the current graph
+        current_graph_rdd = current_graph_rdd\
+            .zip(current_graph_rdd_updates)\
+            .map(lambda pair: merge_heaps(pair[0], pair[1]))
 
     # stack results (again, shouldn't collect result, but instead save to storage)
     current_graph = np.hstack(current_graph_rdd.collect())
