@@ -6,6 +6,8 @@ from numpy.testing import assert_allclose
 
 from pyspark.sql import SparkSession
 
+from pynndescent import distances
+from pynndescent import pynndescent_
 from pynndescent import utils
 from pynndescent import spark
 
@@ -51,3 +53,14 @@ class TestSpark(unittest.TestCase):
 
         assert_allclose(new_candidate_neighbors_spark, new_candidate_neighbors)
         assert_allclose(old_candidate_neighbors_spark, old_candidate_neighbors)
+
+    def test_nn_descent(self):
+        data = np.array([[-1, -1], [-2, -1], [-3, -2], [1, 1], [2, 1], [3, 2]])
+        n_neighbors = 2
+        max_candidates = 8
+
+        nn_descent = pynndescent_.make_nn_descent(distances.named_distances['euclidean'], ())
+        res = nn_descent(data, n_neighbors=n_neighbors, rng_state=spark.get_rng_state(42), max_candidates=max_candidates, n_iters=1, delta=0, rp_tree_init=False)
+        print(res)
+
+        # spark here

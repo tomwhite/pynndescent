@@ -126,7 +126,7 @@ def make_nn_descent(dist, dist_args):
     specialised to the given metric.
     """
 
-    @numba.njit(fastmath=True)
+    #@numba.njit(fastmath=True)
     def nn_descent(data, n_neighbors, rng_state, max_candidates=50,
                    n_iters=10, delta=0.001, rho=0.5,
                    rp_tree_init=True, leaf_array=None, verbose=False):
