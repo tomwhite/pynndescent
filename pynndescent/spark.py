@@ -64,14 +64,12 @@ def merge_heaps(heap1, heap2):
             heap_push(heap, row, weight, index, flag)
     return heap
 
-def init_current_graph(data, n_neighbors, random_state):
+def init_current_graph(data, n_neighbors, rng_state):
     # This is just a copy from make_nn_descent -> nn_descent
 
     # TODO: parallelize this
 
     dist = distances.named_distances['euclidean']
-
-    rng_state = get_rng_state(random_state)
 
     current_graph = make_heap(data.shape[0], n_neighbors)
     # for each row i
@@ -87,8 +85,8 @@ def init_current_graph(data, n_neighbors, random_state):
 
     return current_graph
 
-def init_current_graph_rdd(sc, data, n_neighbors, random_state):
-    current_graph = init_current_graph(data, n_neighbors, random_state)
+def init_current_graph_rdd(sc, data, n_neighbors, rng_state):
+    current_graph = init_current_graph(data, n_neighbors, rng_state)
     s = current_graph.shape
     chunk_size = 4
     current_graph_rdd = to_rdd(sc, current_graph, (s[0], chunk_size, s[2]))
@@ -158,45 +156,67 @@ def build_candidates(sc, current_graph_rdd, n_vertices, n_neighbors, max_candida
 def nn_descent(sc, data, n_neighbors, rng_state, max_candidates=50,
                n_iters=10, delta=0.001, rho=0.5,
                rp_tree_init=False, leaf_array=None, verbose=False):
+
+    dist = distances.named_distances['euclidean']
+
     n_vertices = data.shape[0]
+    chunk_size = 4
+    current_graph_chunks = (3, chunk_size, n_neighbors) # 3 is first heap dimension
 
     current_graph_rdd = init_current_graph_rdd(sc, data, n_neighbors, rng_state)
 
     for n in range(n_iters):
 
-        (new_candidate_neighbors,
-         old_candidate_neighbors) = build_candidates(sc, current_graph_rdd,
+        candidate_neighbors_combined = build_candidates_rdd(sc, current_graph_rdd,
                                                      n_vertices,
                                                      n_neighbors,
                                                      max_candidates,
                                                      rng_state, rho)
 
-        c = 0
-        for i in range(n_vertices):
-            for j in range(max_candidates):
-                p = int(new_candidate_neighbors[0, i, j])
-                if p < 0:
-                    continue
-                for k in range(j, max_candidates):
-                    q = int(new_candidate_neighbors[0, i, k])
-                    if q < 0:
-                        continue
 
-                    d = dist(data[p], data[q], *dist_args)
-                    c += heap_push(current_graph, p, d, q, 1)
-                    c += heap_push(current_graph, q, d, p, 1)
+        def nn_descent_for_each_part(index, iterator):
+            offset = index * chunk_size
+            for candidate_neighbors_combined_part in iterator:
+                new_candidate_neighbors_part, old_candidate_neighbors_part = candidate_neighbors_combined_part
+                n_vertices_part = new_candidate_neighbors_part.shape[1]
+                # Each part has its own heaps for the current graph, which
+                # are combined in the reduce stage.
+                current_graph = make_heap(n_vertices, n_neighbors)
+                c = 0 # not used yet (needs combining across all partitions)
+                for i in range(n_vertices_part):
+                    for j in range(max_candidates):
+                        p = int(new_candidate_neighbors_part[0, i, j])
+                        if p < 0:
+                            continue
+                        for k in range(j, max_candidates):
+                            q = int(new_candidate_neighbors_part[0, i, k])
+                            if q < 0:
+                                continue
 
-                for k in range(max_candidates):
-                    q = int(old_candidate_neighbors[0, i, k])
-                    if q < 0:
-                        continue
+                            d = dist(data[p], data[q])
+                            c += heap_push(current_graph, p, d, q, 1)
+                            c += heap_push(current_graph, q, d, p, 1)
 
-                    d = dist(data[p], data[q], *dist_args)
-                    c += heap_push(current_graph, p, d, q, 1)
-                    c += heap_push(current_graph, q, d, p, 1)
+                        for k in range(max_candidates):
+                            q = int(old_candidate_neighbors_part[0, i, k])
+                            if q < 0:
+                                continue
 
+                            d = dist(data[p], data[q])
+                            c += heap_push(current_graph, p, d, q, 1)
+                            c += heap_push(current_graph, q, d, p, 1)
 
-        if c <= delta * n_neighbors * data.shape[0]:
-            break
+                # Split current_graph into chunks and return each chunk keyed by its index.
+                read_chunk_func_new, chunk_indices = read_chunks(current_graph, current_graph_chunks)
+                for i, chunk_index in enumerate(chunk_indices):
+                    yield i, read_chunk_func_new(chunk_index)
+
+        current_graph_rdd = candidate_neighbors_combined\
+            .mapPartitionsWithIndex(nn_descent_for_each_part)\
+            .reduceByKey(merge_heaps)\
+            .values()
+
+    # stack results (again, shouldn't collect result, but instead save to storage)
+    current_graph = np.hstack(current_graph_rdd.collect())
 
     return deheap_sort(current_graph)

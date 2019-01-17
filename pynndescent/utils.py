@@ -314,7 +314,7 @@ def siftdown(heap1, heap2, elt):
             elt = swap
 
 
-@numba.njit()
+#@numba.njit()
 def deheap_sort(heap):
     """Given an array of heaps (of indices and weights), unpack the heap
     out to give and array of sorted lists of indices and weights by increasing

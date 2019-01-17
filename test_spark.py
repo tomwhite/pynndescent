@@ -43,11 +43,11 @@ class TestSpark(unittest.TestCase):
         n_neighbors = 2
         max_candidates = 8
 
-        current_graph = spark.init_current_graph(data, n_neighbors, random_state=42)
+        current_graph = spark.init_current_graph(data, n_neighbors, spark.get_rng_state(42))
         new_candidate_neighbors, old_candidate_neighbors =\
             utils.build_candidates(current_graph, n_vertices, n_neighbors, max_candidates, spark.get_rng_state(42))
 
-        current_graph_rdd = spark.init_current_graph_rdd(self.sc, data, n_neighbors, random_state=42)
+        current_graph_rdd = spark.init_current_graph_rdd(self.sc, data, n_neighbors, spark.get_rng_state(42))
         new_candidate_neighbors_spark, old_candidate_neighbors_spark =\
             spark.build_candidates(self.sc, current_graph_rdd, n_vertices, n_neighbors, max_candidates, spark.get_rng_state(42))
 
