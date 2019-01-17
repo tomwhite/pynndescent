@@ -73,6 +73,8 @@ def build_candidates(sc, current_graph, n_vertices, n_neighbors, max_candidates,
     chunk_size = 4
     current_graph_rdd = to_rdd(sc, current_graph, (s[0], chunk_size, s[2]))
 
+    candidate_chunks = (3, chunk_size, max_candidates)
+
     def build_candidates_for_each_part(index, iterator):
         offset = index * chunk_size
         for current_graph_part in iterator:
@@ -103,27 +105,29 @@ def build_candidates(sc, current_graph, n_vertices, n_neighbors, max_candidates,
                         if c > 0 :
                             current_graph_part[2, i, j] = 0
 
-            # print("new_candidate_neighbors part", new_candidate_neighbors)
-            # TODO: emit (index, new_candidate_neighbors) pairs, then we can reduceByKey, where merge_heaps is the reduce operation
             # TODO: may want to have (index, new_candidate_neighbors, old_candidate_neighbors)
-            yield new_candidate_neighbors
+            # split new_candidate_neighbors into chunks and return each chunk keyed by its index
+            read_chunk_func, chunk_indices = read_chunks(new_candidate_neighbors, candidate_chunks)
+            for i, chunk_index in enumerate(chunk_indices):
+                yield i, read_chunk_func(chunk_index)
 
-    all_new_candidate_neighbors = current_graph_rdd\
+    new_candidate_neighbors_combined = current_graph_rdd\
         .mapPartitionsWithIndex(build_candidates_for_each_part)\
+        .reduceByKey(merge_heaps)\
+        .values()\
         .collect()
 
-    merged_new_candidate_neighbors = merge_heaps(all_new_candidate_neighbors[0], all_new_candidate_neighbors[1])
-    # print("merged_new_candidate_neighbors", merged_new_candidate_neighbors)
-
-    return merged_new_candidate_neighbors
+    # stack results (this should really be materialized to a store, e.g. as Zarr)
+    return np.hstack(new_candidate_neighbors_combined)
 
 def merge_heaps(heap1, heap2):
+    heap = heap1.copy()
     # TODO: check heaps have the same size
     s = heap2.shape
     for row in range(s[1]):
-        for ind in range(s[2]): # TODO: reverse to make more efficient
+        for ind in range(s[2]): # TODO: reverse to make more efficient?
             index = heap2[0, row, ind]
             weight = heap2[1, row, ind]
             flag = heap2[2, row, ind]
-            heap_push(heap1, row, weight, index, flag)
-    return heap1
+            heap_push(heap, row, weight, index, flag)
+    return heap
