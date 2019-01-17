@@ -77,13 +77,14 @@ def build_candidates(sc, current_graph, n_vertices, n_neighbors, max_candidates,
     chunk_size = 4
     current_graph_rdd = to_rdd(sc, current_graph, (s[0], chunk_size, s[2]))
 
-    candidate_chunks = (3, chunk_size, max_candidates)
+    candidate_chunks = (3, chunk_size, max_candidates) # 3 is first heap dimension
 
     def build_candidates_for_each_part(index, iterator):
         offset = index * chunk_size
         for current_graph_part in iterator:
             n_vertices_part = current_graph_part.shape[1]
-            # each part has its own heaps for old and new candidates
+            # Each part has its own heaps for old and new candidates, which
+            # are combined in the reduce stage.
             # (TODO: make these sparse - use COO (or maybe LIL) to construct, then convert to CSR to slice)
             new_candidate_neighbors = make_heap(n_vertices, max_candidates)
             old_candidate_neighbors = make_heap(n_vertices, max_candidates)
@@ -109,8 +110,8 @@ def build_candidates(sc, current_graph, n_vertices, n_neighbors, max_candidates,
                         if c > 0 :
                             current_graph_part[2, i, j] = 0
 
-            # TODO: may want to have (index, new_candidate_neighbors, old_candidate_neighbors)
-            # split new_candidate_neighbors into chunks and return each chunk keyed by its index
+            # Split candidate_neighbors into chunks and return each chunk keyed by its index.
+            # New and old are the same size, so chunk indices are the same.
             read_chunk_func_new, chunk_indices = read_chunks(new_candidate_neighbors, candidate_chunks)
             read_chunk_func_old, chunk_indices = read_chunks(old_candidate_neighbors, candidate_chunks)
             for i, chunk_index in enumerate(chunk_indices):

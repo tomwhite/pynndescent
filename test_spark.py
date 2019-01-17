@@ -47,4 +47,5 @@ class TestSpark(unittest.TestCase):
 
         new_candidate_neighbors_spark, old_candidate_neighbors_spark = spark.build_candidates(self.sc, current_graph.copy(), n_vertices, n_neighbors, max_candidates, spark.get_rng_state(42))
 
-        assert_allclose(new_candidate_neighbors_spark[0], new_candidate_neighbors[0])
+        assert_allclose(new_candidate_neighbors_spark, new_candidate_neighbors)
+        assert_allclose(old_candidate_neighbors_spark, old_candidate_neighbors)
