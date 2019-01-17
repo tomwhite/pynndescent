@@ -48,6 +48,10 @@ def get_rng_state(random_state):
     return random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
 def init_current_graph(data, n_neighbors, random_state):
+    # This is just a copy from make_nn_descent -> nn_descent
+
+    # TODO: parallelize this
+
     dist = distances.named_distances['euclidean']
 
     rng_state = get_rng_state(random_state)
@@ -107,18 +111,27 @@ def build_candidates(sc, current_graph, n_vertices, n_neighbors, max_candidates,
 
             # TODO: may want to have (index, new_candidate_neighbors, old_candidate_neighbors)
             # split new_candidate_neighbors into chunks and return each chunk keyed by its index
-            read_chunk_func, chunk_indices = read_chunks(new_candidate_neighbors, candidate_chunks)
+            read_chunk_func_new, chunk_indices = read_chunks(new_candidate_neighbors, candidate_chunks)
+            read_chunk_func_old, chunk_indices = read_chunks(old_candidate_neighbors, candidate_chunks)
             for i, chunk_index in enumerate(chunk_indices):
-                yield i, read_chunk_func(chunk_index)
+                yield i, (read_chunk_func_new(chunk_index), read_chunk_func_old(chunk_index))
 
-    new_candidate_neighbors_combined = current_graph_rdd\
+    candidate_neighbors_combined = current_graph_rdd\
         .mapPartitionsWithIndex(build_candidates_for_each_part)\
-        .reduceByKey(merge_heaps)\
+        .reduceByKey(merge_heap_pairs)\
         .values()\
         .collect()
 
     # stack results (this should really be materialized to a store, e.g. as Zarr)
-    return np.hstack(new_candidate_neighbors_combined)
+    new_candidate_neighbors_combined = np.hstack([pair[0] for pair in candidate_neighbors_combined])
+    old_candidate_neighbors_combined = np.hstack([pair[1] for pair in candidate_neighbors_combined])
+
+    return new_candidate_neighbors_combined, old_candidate_neighbors_combined
+
+def merge_heap_pairs(heap_pair1, heap_pair2):
+    heap1_new, heap1_old = heap_pair1
+    heap2_new, heap2_old = heap_pair2
+    return merge_heaps(heap1_new, heap2_new), merge_heaps(heap1_old, heap2_old)
 
 def merge_heaps(heap1, heap2):
     heap = heap1.copy()
