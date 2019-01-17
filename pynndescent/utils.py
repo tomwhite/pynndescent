@@ -420,9 +420,7 @@ def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates,
             if r.random_sample() < rho:
                 c = 0
                 if isn:
-                    if i == 1:
-                        print("heap_push(new_candidate_neighbors, i, d, idx, isn)", i, d, idx, isn)
-                    if idx == 1:
+                    if i == 3:
                         print("heap_push(new_candidate_neighbors, i, d, idx, isn)", i, d, idx, isn)
                     c += heap_push(new_candidate_neighbors, i, d, idx, isn)
                     c += heap_push(new_candidate_neighbors, idx, d, i, isn)
