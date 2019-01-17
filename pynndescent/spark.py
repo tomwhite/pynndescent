@@ -66,28 +66,25 @@ def init_current_graph(data, n_neighbors, random_state):
 
     return current_graph
 
+# spark version
 def build_candidates(sc, current_graph, n_vertices, n_neighbors, max_candidates,
                      rng_state, rho=0.5):
-    # spark version
     s = current_graph.shape
     chunk_size = 4
     current_graph_rdd = to_rdd(sc, current_graph, (s[0], chunk_size, s[2]))
 
-    def f2(index, iterator):
+    def build_candidates_for_each_part(index, iterator):
+        offset = index * chunk_size
         for current_graph_part in iterator:
-            # print("current_graph_part", current_graph_part)
-
+            n_vertices_part = current_graph_part.shape[1]
             # each part has its own heaps for old and new candidates
             # (TODO: consider making these sparse?)
             new_candidate_neighbors = make_heap(n_vertices, max_candidates)
             old_candidate_neighbors = make_heap(n_vertices, max_candidates)
-            n_vertices_part = current_graph_part.shape[1]
-            offset = index * chunk_size
             for i in range(n_vertices_part):
                 iabs = i + offset
                 r = np.random.RandomState()
-                r.seed(i)
-                print("seed spark " + str(i))
+                r.seed(iabs)
                 for j in range(n_neighbors):
                     if current_graph_part[0, i, j] < 0:
                         continue
@@ -97,8 +94,6 @@ def build_candidates(sc, current_graph, n_vertices, n_neighbors, max_candidates,
                     if r.random_sample() < rho:
                         c = 0
                         if isn:
-                            if iabs == 3:
-                                print("heap_push(new_candidate_neighbors, iabs, d, idx, isn) spark", iabs, d, idx, isn)
                             c += heap_push(new_candidate_neighbors, iabs, d, idx, isn)
                             c += heap_push(new_candidate_neighbors, idx, d, iabs, isn)
                         else:
@@ -113,8 +108,9 @@ def build_candidates(sc, current_graph, n_vertices, n_neighbors, max_candidates,
             # TODO: may want to have (index, new_candidate_neighbors, old_candidate_neighbors)
             yield new_candidate_neighbors
 
-    all_new_candidate_neighbors = current_graph_rdd.mapPartitionsWithIndex(f2).collect()
-    print("all_new_candidate_neighbors", all_new_candidate_neighbors)
+    all_new_candidate_neighbors = current_graph_rdd\
+        .mapPartitionsWithIndex(build_candidates_for_each_part)\
+        .collect()
 
     merged_new_candidate_neighbors = merge_heaps(all_new_candidate_neighbors[0], all_new_candidate_neighbors[1])
     # print("merged_new_candidate_neighbors", merged_new_candidate_neighbors)

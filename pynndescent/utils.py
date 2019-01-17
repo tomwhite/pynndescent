@@ -409,8 +409,7 @@ def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates,
         # use a random state, with seed set to the row number so we can check
         # against the distributed algorithm
         r = np.random.RandomState()
-        r.seed(i % 4)
-        print("seed " + str(i % 4))
+        r.seed(i)
         for j in range(n_neighbors):
             if current_graph[0, i, j] < 0:
                 continue
@@ -420,8 +419,6 @@ def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates,
             if r.random_sample() < rho:
                 c = 0
                 if isn:
-                    if i == 3:
-                        print("heap_push(new_candidate_neighbors, i, d, idx, isn)", i, d, idx, isn)
                     c += heap_push(new_candidate_neighbors, i, d, idx, isn)
                     c += heap_push(new_candidate_neighbors, idx, d, i, isn)
                 else:
