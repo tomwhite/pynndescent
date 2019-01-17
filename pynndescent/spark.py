@@ -1,5 +1,6 @@
 from functools import partial
 import math
+import numpy as np
 
 from sklearn.utils import check_random_state
 
@@ -80,15 +81,20 @@ def build_candidates(sc, current_graph, n_vertices, n_neighbors, max_candidates,
         old_candidate_neighbors = make_heap(n_vertices, max_candidates)
         n_vertices_part = current_graph_part.shape[1]
         for i in range(n_vertices_part):
+            r = np.random.RandomState()
+            r.seed(i)
+            print("seed spark " + str(i))
             for j in range(n_neighbors):
                 if current_graph_part[0, i, j] < 0:
                     continue
                 idx = current_graph_part[0, i, j]
                 isn = current_graph_part[2, i, j]
-                d = tau_rand(rng_state)
-                if tau_rand(rng_state) < rho:
+                d = r.random_sample()
+                if r.random_sample() < rho:
                     c = 0
                     if isn:
+                        if i == 1:
+                            print("heap_push(new_candidate_neighbors, i, d, idx, isn) spark", i, d, idx, isn)
                         c += heap_push(new_candidate_neighbors, i, d, idx, isn)
                         c += heap_push(new_candidate_neighbors, idx, d, i, isn)
                     else:
@@ -103,7 +109,7 @@ def build_candidates(sc, current_graph, n_vertices, n_neighbors, max_candidates,
         # TODO: may want to have (index, new_candidate_neighbors, old_candidate_neighbors)
         return new_candidate_neighbors
     all_new_candidate_neighbors = current_graph_rdd.map(f).collect()
-    # print("all_new_candidate_neighbors", all_new_candidate_neighbors)
+    print("all_new_candidate_neighbors", all_new_candidate_neighbors)
 
     merged_new_candidate_neighbors = merge_heaps(all_new_candidate_neighbors[0], all_new_candidate_neighbors[1])
     # print("merged_new_candidate_neighbors", merged_new_candidate_neighbors)
