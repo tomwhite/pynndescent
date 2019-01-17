@@ -72,7 +72,7 @@ def build_candidates(sc, current_graph, n_vertices, n_neighbors, max_candidates,
     current_graph_rdd = to_rdd(sc, current_graph, (s[0], 4, s[2]))
 
     def f(current_graph_part):
-        print("current_graph_part", current_graph_part)
+        # print("current_graph_part", current_graph_part)
 
         # each part has its own heaps for old and new candidates
         # (TODO: consider making these sparse?)
@@ -103,10 +103,12 @@ def build_candidates(sc, current_graph, n_vertices, n_neighbors, max_candidates,
         # TODO: may want to have (index, new_candidate_neighbors, old_candidate_neighbors)
         return new_candidate_neighbors
     all_new_candidate_neighbors = current_graph_rdd.map(f).collect()
-    print("all_new_candidate_neighbors", all_new_candidate_neighbors)
+    # print("all_new_candidate_neighbors", all_new_candidate_neighbors)
 
     merged_new_candidate_neighbors = merge_heaps(all_new_candidate_neighbors[0], all_new_candidate_neighbors[1])
-    print("merged_new_candidate_neighbors", merged_new_candidate_neighbors)
+    # print("merged_new_candidate_neighbors", merged_new_candidate_neighbors)
+
+    return merged_new_candidate_neighbors
 
 def merge_heaps(heap1, heap2):
     # TODO: check heaps have the same size
