@@ -47,6 +47,23 @@ def get_rng_state(random_state):
     random_state = check_random_state(random_state)
     return random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
+def merge_heap_pairs(heap_pair1, heap_pair2):
+    heap1_new, heap1_old = heap_pair1
+    heap2_new, heap2_old = heap_pair2
+    return merge_heaps(heap1_new, heap2_new), merge_heaps(heap1_old, heap2_old)
+
+def merge_heaps(heap1, heap2):
+    heap = heap1.copy()
+    # TODO: check heaps have the same size
+    s = heap2.shape
+    for row in range(s[1]):
+        for ind in range(s[2]): # TODO: reverse to make more efficient?
+            index = heap2[0, row, ind]
+            weight = heap2[1, row, ind]
+            flag = heap2[2, row, ind]
+            heap_push(heap, row, weight, index, flag)
+    return heap
+
 def init_current_graph(data, n_neighbors, random_state):
     # This is just a copy from make_nn_descent -> nn_descent
 
@@ -129,19 +146,48 @@ def build_candidates(sc, current_graph, n_vertices, n_neighbors, max_candidates,
 
     return new_candidate_neighbors_combined, old_candidate_neighbors_combined
 
-def merge_heap_pairs(heap_pair1, heap_pair2):
-    heap1_new, heap1_old = heap_pair1
-    heap2_new, heap2_old = heap_pair2
-    return merge_heaps(heap1_new, heap2_new), merge_heaps(heap1_old, heap2_old)
+def nn_descent(sc, data, n_neighbors, rng_state, max_candidates=50,
+               n_iters=10, delta=0.001, rho=0.5,
+               rp_tree_init=False, leaf_array=None, verbose=False):
+    n_vertices = data.shape[0]
 
-def merge_heaps(heap1, heap2):
-    heap = heap1.copy()
-    # TODO: check heaps have the same size
-    s = heap2.shape
-    for row in range(s[1]):
-        for ind in range(s[2]): # TODO: reverse to make more efficient?
-            index = heap2[0, row, ind]
-            weight = heap2[1, row, ind]
-            flag = heap2[2, row, ind]
-            heap_push(heap, row, weight, index, flag)
-    return heap
+    current_graph = init_current_graph(data, n_neighbors, rng_state)
+
+    for n in range(n_iters):
+
+        (new_candidate_neighbors,
+         old_candidate_neighbors) = build_candidates(sc, current_graph,
+                                                     n_vertices,
+                                                     n_neighbors,
+                                                     max_candidates,
+                                                     rng_state, rho)
+
+        c = 0
+        for i in range(n_vertices):
+            for j in range(max_candidates):
+                p = int(new_candidate_neighbors[0, i, j])
+                if p < 0:
+                    continue
+                for k in range(j, max_candidates):
+                    q = int(new_candidate_neighbors[0, i, k])
+                    if q < 0:
+                        continue
+
+                    d = dist(data[p], data[q], *dist_args)
+                    c += heap_push(current_graph, p, d, q, 1)
+                    c += heap_push(current_graph, q, d, p, 1)
+
+                for k in range(max_candidates):
+                    q = int(old_candidate_neighbors[0, i, k])
+                    if q < 0:
+                        continue
+
+                    d = dist(data[p], data[q], *dist_args)
+                    c += heap_push(current_graph, p, d, q, 1)
+                    c += heap_push(current_graph, q, d, p, 1)
+
+
+        if c <= delta * n_neighbors * data.shape[0]:
+            break
+
+    return deheap_sort(current_graph)

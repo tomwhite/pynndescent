@@ -60,7 +60,8 @@ class TestSpark(unittest.TestCase):
         max_candidates = 8
 
         nn_descent = pynndescent_.make_nn_descent(distances.named_distances['euclidean'], ())
-        res = nn_descent(data, n_neighbors=n_neighbors, rng_state=spark.get_rng_state(42), max_candidates=max_candidates, n_iters=1, delta=0, rp_tree_init=False)
-        print(res)
+        nn = nn_descent(data, n_neighbors=n_neighbors, rng_state=spark.get_rng_state(42), max_candidates=max_candidates, n_iters=1, delta=0, rp_tree_init=False)
 
-        # spark here
+        nn_spark = spark.nn_descent(self.sc, data, n_neighbors=n_neighbors, rng_state=spark.get_rng_state(42), max_candidates=max_candidates, n_iters=1, delta=0, rp_tree_init=False)
+
+        assert_allclose(nn, nn_spark)
