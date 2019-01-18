@@ -221,6 +221,10 @@ def nn_descent(sc, data, n_neighbors, rng_state, max_candidates=50,
             .zip(current_graph_rdd_updates)\
             .map(lambda pair: merge_heaps(pair[0], pair[1]))
 
+        # TODO: transfer c back from each partition and sum, in order to implement termination criterion
+        # if c <= delta * n_neighbors * data.shape[0]:
+        #     break
+
     # stack results (again, shouldn't collect result, but instead save to storage)
     current_graph = np.hstack(current_graph_rdd.collect())
 
