@@ -66,8 +66,7 @@ def merge_heaps(heap1, heap2):
 
 def init_current_graph(data, n_neighbors, rng_state):
     # This is just a copy from make_nn_descent -> nn_descent
-
-    # TODO: parallelize this
+    r = np.random.RandomState()
 
     dist = distances.named_distances['euclidean']
 
@@ -75,8 +74,8 @@ def init_current_graph(data, n_neighbors, rng_state):
     # for each row i
     for i in range(data.shape[0]):
         # choose K rows from the whole matrix
-        indices = rejection_sample(n_neighbors, data.shape[0], rng_state)
-        print(indices)
+        r.seed(i)
+        indices = rejection_sample2(n_neighbors, data.shape[0], r)
         # and work out the dist from row i to each of the random K rows
         for j in range(indices.shape[0]):
             d = dist(data[i], data[indices[j]])
@@ -86,11 +85,40 @@ def init_current_graph(data, n_neighbors, rng_state):
     return current_graph
 
 def init_current_graph_rdd(sc, data, n_neighbors, rng_state):
-    current_graph = init_current_graph(data, n_neighbors, rng_state)
+    dist = distances.named_distances['euclidean']
+    n_vertices = data.shape[0]
+    current_graph = make_heap(n_vertices, n_neighbors)
     s = current_graph.shape
     chunk_size = 4
+    current_graph_chunks = (3, chunk_size, n_neighbors) # 3 is first heap dimension
     current_graph_rdd = to_rdd(sc, current_graph, (s[0], chunk_size, s[2]))
-    return current_graph_rdd
+
+    def init_current_graph_for_each_part(index, iterator):
+        r = np.random.RandomState()
+        offset = index * chunk_size
+        for current_graph_part in iterator:
+            n_vertices_part = current_graph_part.shape[1]
+            # Each part has its own heap for the current graph, which
+            # are combined in the reduce stage.
+            current_graph_local = make_heap(n_vertices, n_neighbors)
+            for i in range(n_vertices_part):
+                iabs = i + offset
+                r.seed(iabs)
+                indices = rejection_sample2(n_neighbors, n_vertices, r)
+                for j in range(indices.shape[0]):
+                    d = dist(data[iabs], data[indices[j]])
+                    heap_push(current_graph_local, iabs, d, indices[j], 1)
+                    heap_push(current_graph_local, indices[j], d, iabs, 1)
+
+            # Split current_graph into chunks and return each chunk keyed by its index.
+            read_chunk_func_new, chunk_indices = read_chunks(current_graph_local, current_graph_chunks)
+            for i, chunk_index in enumerate(chunk_indices):
+                yield i, read_chunk_func_new(chunk_index)
+
+    return current_graph_rdd \
+        .mapPartitionsWithIndex(init_current_graph_for_each_part) \
+        .reduceByKey(merge_heaps) \
+        .values()
 
 def build_candidates_rdd(sc, current_graph_rdd, n_vertices, n_neighbors, max_candidates,
                      rng_state, rho=0.5):

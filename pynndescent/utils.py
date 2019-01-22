@@ -100,6 +100,40 @@ def rejection_sample(n_samples, pool_size, rng_state):
     return result
 
 
+def rejection_sample2(n_samples, pool_size, random_state):
+    """Generate n_samples many integers from 0 to pool_size such that no
+    integer is selected twice. The duplication constraint is achieved via
+    rejection sampling.
+
+    Parameters
+    ----------
+    n_samples: int
+        The number of random samples to select from the pool
+
+    pool_size: int
+        The size of the total pool of candidates to sample from
+
+    rng_state: array of int64, shape (3,)
+        Internal state of the random number generator
+
+    Returns
+    -------
+    sample: array of shape(n_samples,)
+        The ``n_samples`` randomly selected elements from the pool.
+    """
+    result = np.empty(n_samples, dtype=np.int64)
+    for i in range(n_samples):
+        reject_sample = True
+        while reject_sample:
+            j = random_state.random_integers(0, pool_size - 1)
+            for k in range(i):
+                if j == result[k]:
+                    break
+            else:
+                reject_sample = False
+        result[i] = j
+    return result
+
 @numba.njit('f8[:, :, :](i8,i8)')
 def make_heap(n_points, size):
     """Constructor for the numba enabled heap objects. The heaps are used
