@@ -1,4 +1,5 @@
 from functools import partial
+import itertools
 import math
 import numpy as np
 
@@ -9,6 +10,9 @@ from pynndescent.utils import *
 
 INT32_MIN = np.iinfo(np.int32).min + 1
 INT32_MAX = np.iinfo(np.int32).max - 1
+
+# Chunking functions
+# Could use Zarr/Zappy/Anndata for these
 
 def read_zarr_chunk(arr, chunks, chunk_index):
     return arr[
@@ -28,24 +32,36 @@ def get_chunk_indices(shape, chunks):
         for k in range(int(math.ceil(float(shape[2]) / chunks[2])))
     ]
 
+def get_chunk_sizes(shape, chunks):
+    def sizes(length, chunk_length):
+        res = [chunk_length] * (length // chunk_length)
+        if length % chunk_length != 0:
+            res.append(length % chunk_length)
+        return res
+
+    return itertools.product(sizes(shape[0], chunks[0]), sizes(shape[1], chunks[1]), sizes(shape[2], chunks[2]))
+
 def read_chunks(arr, chunks):
     shape = arr.shape
     func = partial(read_zarr_chunk, arr, chunks)
     chunk_indices = get_chunk_indices(shape, chunks)
     return func, chunk_indices
 
-def to_rdd(sc, arr, chunks):
-    func, chunk_indices = read_chunks(arr, chunks)
-    local_rows = [func(i) for i in chunk_indices]
-    return sc.parallelize(local_rows, len(local_rows))
-
 def to_local_rows(sc, arr, chunks):
     func, chunk_indices = read_chunks(arr, chunks)
     return [func(i) for i in chunk_indices]
 
-def get_rng_state(random_state):
-    random_state = check_random_state(random_state)
-    return random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+# Distributed heap functions
+# Distributed heaps can only be created and merged. Heap push is a local
+# operation only.
+
+def make_heap_rdd(sc, n_points, size, chunk_size):
+    shape = (3, n_points, size)
+    chunks = (shape[0], chunk_size, shape[2])
+    chunk_sizes = list(get_chunk_sizes(shape, chunks))
+    def make_heap_chunk(chunk_size):
+        return make_heap(chunk_size[1], chunk_size[2])
+    return sc.parallelize(chunk_sizes, len(chunk_sizes)).map(make_heap_chunk)
 
 def merge_heap_pairs(heap_pair1, heap_pair2):
     heap1_new, heap1_old = heap_pair1
@@ -63,6 +79,12 @@ def merge_heaps(heap1, heap2):
             flag = heap2[2, row, ind]
             heap_push(heap, row, weight, index, flag)
     return heap
+
+# NNDescent algorithm
+
+def get_rng_state(random_state):
+    random_state = check_random_state(random_state)
+    return random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
 
 def init_current_graph(data, n_neighbors, rng_state):
     # This is just a copy from make_nn_descent -> nn_descent
@@ -87,11 +109,9 @@ def init_current_graph(data, n_neighbors, rng_state):
 def init_current_graph_rdd(sc, data, n_neighbors, rng_state):
     dist = distances.named_distances['euclidean']
     n_vertices = data.shape[0]
-    current_graph = make_heap(n_vertices, n_neighbors)
-    s = current_graph.shape
     chunk_size = 4
+    current_graph_rdd = make_heap_rdd(sc, n_vertices, n_neighbors, chunk_size)
     current_graph_chunks = (3, chunk_size, n_neighbors) # 3 is first heap dimension
-    current_graph_rdd = to_rdd(sc, current_graph, (s[0], chunk_size, s[2]))
 
     def init_current_graph_for_each_part(index, iterator):
         r = np.random.RandomState()
