@@ -125,7 +125,7 @@ def rejection_sample2(n_samples, pool_size, random_state):
     for i in range(n_samples):
         reject_sample = True
         while reject_sample:
-            j = random_state.random_integers(0, pool_size - 1)
+            j = random_state.randint(0, pool_size)
             for k in range(i):
                 if j == result[k]:
                     break
