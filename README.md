@@ -35,6 +35,28 @@ In the distributed implementation, arrays are chunked along axis 1, since this
 is the number of points in the data, which may be millions or more for single cell
 data.
 
+### Distributed update of heaps
+
+A distributed heap is an array with the structure described in the previous section,
+and which has been split into equal sized chunks, or partitions.
+
+A distributed heap can be updated in a MapReduce operation as follows. Each partition holds
+a temporary copy of a sparse heap, initially empty. The Map phase adds entries
+to the heap, which may occur at _any_ row index. The heap is limited in size since it
+is sparse.
+
+After all the updates have been applied to the temporary sparse heap for a given
+partition, the heap must be chunked (using the same chunking as the original
+distributed heap) into a series of sparse heap chunks. This results in a set of
+`(index, sparse heap chunk)` pairs, where the index is the index of the sparse
+heap chunk in the array. These pairs are emitted by the Map. If a sparse
+heap chunk is empty for a given index then it is not emitted by the Map.
+
+These pairs are shuffled by the key (the index), and the Reduce combines all the
+sparse heap chunks for a given index, including the chunk for that index
+from the original heap, to produce a final (dense) heap chunk for each partition.
+The combine stage is simply a heap merge. The result is an updated distributed heap.
+
 ### The NNDescent algorithm
 
 The heart of the algorithm is implemented in `nn_descent` in `pynndescent/pynndescent_.py`.
@@ -55,7 +77,8 @@ Each of these steps is now discussed in the context of the distributed implement
 The graph is seeded with random connections with random weights. If there are
 `N` data points and `K` nearest neighbors then `N * K` distances are computed.
 
-In the distributed implementation, ...
+The graph is represented as a distributed heap, as described in the previous
+section. The Map operation seeds random connections from each chunk.
 
 #### Build candidate neighbors for current graph
 
@@ -66,23 +89,15 @@ There are two candidates heaps: one for new candidate neighbors, and one for old
 candidate neighbors. (Only new neighbors need to be checked in the next step.)
 
 In the distributed implementation, the current graph is partitioned, and each
-chunk processed in its own partition. Each partition holds a temporary copy of
-two heaps, for new and old candidate neighbors.
+chunk processed in its own partition. A pair of distributed heaps are used for
+new and old candidate neighbors.
 
-The computation is a MapReduce.
 In the Map phase, the heaps are updated using information from the current graph
 partition. (The local join optimization, described in [Dong], is the observation
 that to find neighbors of neighbors, you don’t have to traverse `a -> b -> c`,
 you just have to look at all (ordered) pairs in around `b`, which will include
 `a` and `c`. In this way, the Map phase doesn't need to do a join with the rest
 of the graph.)
-
-The output of the Map is a set of `(index, candidate neighbor chunk)` pairs,
-where the index is the index of the candidate neighbor chunk in the array.
-
-These pairs are shuffled by the key (the index), and the Reduce combines all the
-candidate neighbor chunks for a given index. The combine stage is simply a heap
-merge.
 
 The result is a chunked representation of the candidate neighbor heap. (Note that
 the actual implementation is slightly more complicated since there are two heaps,
@@ -94,9 +109,8 @@ This step involves using the candidate neighbor information to update the curren
 graph.
 
 In the distributed implementation, the candidate neighbors heaps are partitioned,
-and each chunk processed in its own partition. Each partition holds a temporary
-copy of the current graph heap. The operation is a MapReduce, similar in form
-to the one for the previous step.
+and each chunk processed in its own partition. A distributed heap is used to
+update the state of the graph using a MapReduce operation.
 
 ### Usage
 
