@@ -1,4 +1,5 @@
 import itertools
+import math
 import numpy as np
 import scipy.sparse
 
@@ -173,3 +174,19 @@ def merge_heaps_sparse(heap1_dense, heap2_sparse):
             flag = heap2_sparse[3][row, ind]
             heap_push(heap1_dense, row, weight, index, flag)
     return heap1_dense
+
+def sparse_to_chunks(heap_sparse, chunks):
+    shape = heap_sparse[1].shape
+    chunk_indices = [
+        (i, j)
+        for i in range(int(math.ceil(float(shape[0]) / chunks[0])))
+        for j in range(int(math.ceil(float(shape[1]) / chunks[1])))
+    ]
+    print(chunk_indices)
+
+    for chunk_index in chunk_indices:
+        x = tuple(heap_sparse[i][chunks[0] * chunk_index[0] : chunks[0] * (chunk_index[0] + 0)].tocsr() for i in (1, 2, 3))
+        for i in (0, 1, 2):
+            print(x[i].data)
+            print(x[i].indices)
+            print(x[i].indptr)
