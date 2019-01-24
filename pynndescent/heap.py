@@ -162,6 +162,18 @@ def rows_in_sparse(heap_sparse):
         indptr = heap_sparse[0].indptr
         return [i for i in range(len(indptr) - 1) if indptr[i] != indptr[i+1]]
 
+def from_rdd_sparse(heap_sparse_rdd):
+    heap_chunks = heap_sparse_rdd.collect()
+    chunk_size = heap_chunks[0][0].shape[0]
+    rows = set()
+    for i, heap_chunk in enumerate(heap_chunks):
+        row_start = i * chunk_size
+        rows.update([row + row_start for row in heap_chunk[3]])
+    weights = scipy.sparse.vstack([heap_chunk[0] for heap_chunk in heap_chunks], format="lil")
+    indices = scipy.sparse.vstack([heap_chunk[1] for heap_chunk in heap_chunks], format="lil")
+    is_new = scipy.sparse.vstack([heap_chunk[2] for heap_chunk in heap_chunks], format="lil")
+    return weights, indices, is_new, rows
+
 def densify(heap_sparse):
     shape = heap_sparse[0].shape
     heap = make_heap(shape[0], shape[1])

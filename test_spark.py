@@ -7,7 +7,7 @@ from numpy.testing import assert_allclose
 from pyspark.sql import SparkSession
 
 from pynndescent import distances
-from pynndescent.heap import print_heap_sparse
+from pynndescent.heap import *
 from pynndescent import pynndescent_
 from pynndescent import utils
 from pynndescent import spark
@@ -44,15 +44,9 @@ class TestSpark(unittest.TestCase):
 
         current_graph = spark.init_current_graph(data, n_neighbors, spark.get_rng_state(42))
         current_graph_rdd = spark.init_current_graph_rdd(self.sc, data, n_neighbors, spark.get_rng_state(42))
+        current_graph_rdd_materialized = densify(from_rdd_sparse(current_graph_rdd))
 
-        print("current graph", current_graph)
-
-        for cg in current_graph_rdd.collect():
-            print_heap_sparse(cg)
-
-        # current_graph_rdd_materialized = np.hstack(current_graph_rdd.collect())
-        #
-        # assert_allclose(current_graph_rdd_materialized, current_graph)
+        assert_allclose(current_graph_rdd_materialized, current_graph)
 
     # def test_build_candidates(self):
     #     data = np.array([[-1, -1], [-2, -1], [-3, -2], [1, 1], [2, 1], [3, 2]])
