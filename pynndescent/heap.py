@@ -48,6 +48,8 @@ def merge_heaps(heap1, heap2):
 def make_heap_sparse(n_points, size):
     # scipy.sparse only supports 2D matrices, so we have one for each of the
     # three positions in the first axis
+    # TODO: lil_matrix isn't sparse enough since it stores an empty list for every row
+    # TODO: write own sparse array (3D too?) that is row-wise, but only stores populated rows
     indices = scipy.sparse.lil_matrix((n_points, size))
     weights = scipy.sparse.lil_matrix((n_points, size))
     is_new = scipy.sparse.lil_matrix((n_points, size))
@@ -148,12 +150,13 @@ def heap_push_sparse(heap, row, weight, index, flag):
     return 1
 
 def densify(heap):
+    # This should not be used (except for debugging) since it doesn't fill in empty rows correctly
     return np.stack([heap[i].toarray() for i in (0, 1, 2)])
 
 # def read_heap_chunks_sparse(heap, chunks):
 #     shape = heap[1].shape
 #     def func(chunk_index):
-#         return densify0(tuple(heap[i][chunks[0] * chunk_index[0] : chunks[0] * (chunk_index[0] + 0)] for i in (0, 1, 2)))
+#         return densify0(tuple(heap[i][chunks[0] * chunk_index[0] : chunks[0] * (chunk_index[0] + 1)] for i in (0, 1, 2)))
 #     chunk_indices = [
 #         (i, j)
 #         for i in range(int(math.ceil(float(shape[0]) / chunks[0])))
@@ -166,7 +169,10 @@ def merge_heaps_sparse(heap1_dense, heap2_sparse):
     all_indices = heap2_sparse[0]
     all_weights = heap2_sparse[1]
     all_is_new = heap2_sparse[2]
-    rows = heap2_sparse[3]
+    if len(heap2_sparse) == 4: # row information is last item in tuple
+        rows = heap2_sparse[3]
+    else: # CSR format where row information is implicit
+        rows = [i for i in range(len(all_indices.indptr) - 1) if all_indices.indptr[i] != all_indices.indptr[i+1]]
     for row in rows:
         for ind in range(all_indices.shape[1]):
             index = all_indices[row, ind]
@@ -175,18 +181,13 @@ def merge_heaps_sparse(heap1_dense, heap2_sparse):
             heap_push(heap1_dense, row, weight, index, flag)
     return heap1_dense
 
-def sparse_to_chunks(heap_sparse, chunks):
+def chunk_heap_sparse(heap_sparse, chunks):
+    # converts to CSR as a side-effect, which keeps row information
     shape = heap_sparse[1].shape
     chunk_indices = [
         (i, j)
         for i in range(int(math.ceil(float(shape[0]) / chunks[0])))
         for j in range(int(math.ceil(float(shape[1]) / chunks[1])))
     ]
-    print(chunk_indices)
-
     for chunk_index in chunk_indices:
-        x = tuple(heap_sparse[i][chunks[0] * chunk_index[0] : chunks[0] * (chunk_index[0] + 0)].tocsr() for i in (0, 1, 2))
-        for i in (0, 1, 2):
-            print(x[i].data)
-            print(x[i].indices)
-            print(x[i].indptr)
+        yield tuple(heap_sparse[i][chunks[0] * chunk_index[0] : chunks[0] * (chunk_index[0] + 1)].tocsr() for i in (0, 1, 2))
