@@ -186,7 +186,24 @@ def heap_push_sparse(heap, row, weight, index, flag):
     return 1
 
 def densify(heap):
-    return np.vstack([heap[i].todense() for i in (1, 2, 3)])
+    return np.stack([heap[i].toarray() for i in (1, 2, 3)])
+
+def densify0(heap):
+    return np.stack([heap[i].toarray() for i in (0, 1, 2)])
+
+# def read_heap_chunks_sparse(heap, chunks):
+#     shape = heap[1].shape
+#     def func(chunk_index):
+#         return densify0(tuple(heap[i][chunks[0] * chunk_index[0] : chunks[0] * (chunk_index[0] + 0)] for i in (1, 2, 3)))
+#     chunk_indices = [
+#         (i, j)
+#         for i in range(int(math.ceil(float(shape[0]) / chunks[0])))
+#         for j in range(int(math.ceil(float(shape[1]) / chunks[1])))
+#     ]
+#     return func, chunk_indices
+#
+# def merge_heaps_sparse(heap1_dense, heap2_sparse):
+#     pass
 
 # NNDescent algorithm
 
@@ -229,6 +246,7 @@ def init_current_graph_rdd(sc, data, n_neighbors, rng_state):
             # Each part has its own heap for the current graph, which
             # are combined in the reduce stage.
             current_graph_local = make_heap(n_vertices, n_neighbors)
+            current_graph_local_sparse = make_heap_sparse(n_vertices, n_neighbors)
             for i in range(n_vertices_part):
                 iabs = i + offset
                 r.seed(iabs)
@@ -237,8 +255,16 @@ def init_current_graph_rdd(sc, data, n_neighbors, rng_state):
                     d = dist(data[iabs], data[indices[j]])
                     heap_push(current_graph_local, iabs, d, indices[j], 1)
                     heap_push(current_graph_local, indices[j], d, iabs, 1)
+                    heap_push_sparse(current_graph_local_sparse, iabs, d, indices[j], 1)
+                    heap_push_sparse(current_graph_local_sparse, indices[j], d, iabs, 1)
 
             # Split current_graph into chunks and return each chunk keyed by its index.
+
+            # TODO: don't densify, since some rows are unitialized. Instead, merge into a dense heap
+            current_graph_local_from_sparse = densify(current_graph_local_sparse)
+            print("current_graph_local", current_graph_local)
+            print("current_graph_local_from_sparse", current_graph_local_from_sparse)
+            print("equal?", current_graph_local == current_graph_local_from_sparse)
             read_chunk_func_new, chunk_indices = read_chunks(current_graph_local, current_graph_chunks)
             for i, chunk_index in enumerate(chunk_indices):
                 yield i, read_chunk_func_new(chunk_index)
