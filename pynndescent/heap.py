@@ -48,11 +48,11 @@ def merge_heaps(heap1, heap2):
 def make_heap_sparse(n_points, size):
     # scipy.sparse only supports 2D matrices, so we have one for each of the
     # three positions in the first axis
-    rows = set() # which rows have been created
     indices = scipy.sparse.lil_matrix((n_points, size))
     weights = scipy.sparse.lil_matrix((n_points, size))
     is_new = scipy.sparse.lil_matrix((n_points, size))
-    return rows, indices, weights, is_new
+    rows = set() # which rows have been created
+    return indices, weights, is_new, rows
 
 def heap_push_sparse(heap, row, weight, index, flag):
     """Push a new element onto the heap. The heap stores potential neighbors
@@ -82,10 +82,10 @@ def heap_push_sparse(heap, row, weight, index, flag):
     -------
     success: The number of new elements successfully pushed into the heap.
     """
-    rows = heap[0]
-    all_indices = heap[1]
-    all_weights = heap[2]
-    all_is_new = heap[3]
+    all_indices = heap[0]
+    all_weights = heap[1]
+    all_is_new = heap[2]
+    rows = heap[3]
 
     if row not in rows:
         # initialize
@@ -148,15 +148,12 @@ def heap_push_sparse(heap, row, weight, index, flag):
     return 1
 
 def densify(heap):
-    return np.stack([heap[i].toarray() for i in (1, 2, 3)])
-
-def densify0(heap):
     return np.stack([heap[i].toarray() for i in (0, 1, 2)])
 
 # def read_heap_chunks_sparse(heap, chunks):
 #     shape = heap[1].shape
 #     def func(chunk_index):
-#         return densify0(tuple(heap[i][chunks[0] * chunk_index[0] : chunks[0] * (chunk_index[0] + 0)] for i in (1, 2, 3)))
+#         return densify0(tuple(heap[i][chunks[0] * chunk_index[0] : chunks[0] * (chunk_index[0] + 0)] for i in (0, 1, 2)))
 #     chunk_indices = [
 #         (i, j)
 #         for i in range(int(math.ceil(float(shape[0]) / chunks[0])))
@@ -166,12 +163,15 @@ def densify0(heap):
 #
 def merge_heaps_sparse(heap1_dense, heap2_sparse):
     # TODO: check heaps have the same size
-    s = heap2_sparse[1].shape
-    for row in heap2_sparse[0]:
-        for ind in range(s[1]):
-            index = heap2_sparse[1][row, ind]
-            weight = heap2_sparse[2][row, ind]
-            flag = heap2_sparse[3][row, ind]
+    all_indices = heap2_sparse[0]
+    all_weights = heap2_sparse[1]
+    all_is_new = heap2_sparse[2]
+    rows = heap2_sparse[3]
+    for row in rows:
+        for ind in range(all_indices.shape[1]):
+            index = all_indices[row, ind]
+            weight = all_weights[row, ind]
+            flag = all_is_new[row, ind]
             heap_push(heap1_dense, row, weight, index, flag)
     return heap1_dense
 
@@ -185,7 +185,7 @@ def sparse_to_chunks(heap_sparse, chunks):
     print(chunk_indices)
 
     for chunk_index in chunk_indices:
-        x = tuple(heap_sparse[i][chunks[0] * chunk_index[0] : chunks[0] * (chunk_index[0] + 0)].tocsr() for i in (1, 2, 3))
+        x = tuple(heap_sparse[i][chunks[0] * chunk_index[0] : chunks[0] * (chunk_index[0] + 0)].tocsr() for i in (0, 1, 2))
         for i in (0, 1, 2):
             print(x[i].data)
             print(x[i].indices)
