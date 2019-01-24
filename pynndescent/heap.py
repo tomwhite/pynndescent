@@ -153,17 +153,6 @@ def densify(heap):
     # This should not be used (except for debugging) since it doesn't fill in empty rows correctly
     return np.stack([heap[i].toarray() for i in (0, 1, 2)])
 
-# def read_heap_chunks_sparse(heap, chunks):
-#     shape = heap[1].shape
-#     def func(chunk_index):
-#         return densify0(tuple(heap[i][chunks[0] * chunk_index[0] : chunks[0] * (chunk_index[0] + 1)] for i in (0, 1, 2)))
-#     chunk_indices = [
-#         (i, j)
-#         for i in range(int(math.ceil(float(shape[0]) / chunks[0])))
-#         for j in range(int(math.ceil(float(shape[1]) / chunks[1])))
-#     ]
-#     return func, chunk_indices
-#
 def merge_heaps_sparse(heap1_dense, heap2_sparse):
     # TODO: check heaps have the same size
     all_indices = heap2_sparse[0]
@@ -191,3 +180,15 @@ def chunk_heap_sparse(heap_sparse, chunks):
     ]
     for chunk_index in chunk_indices:
         yield tuple(heap_sparse[i][chunks[0] * chunk_index[0] : chunks[0] * (chunk_index[0] + 1)].tocsr() for i in (0, 1, 2))
+
+def read_heap_chunks_sparse(heap_sparse, chunks):
+    # TODO: refactor to reduce duplication with chunk_heap_sparse
+    shape = heap_sparse[1].shape
+    def func(chunk_index):
+        return tuple(heap_sparse[i][chunks[0] * chunk_index[0] : chunks[0] * (chunk_index[0] + 1)].tocsr() for i in (0, 1, 2))
+    chunk_indices = [
+        (i, j)
+        for i in range(int(math.ceil(float(shape[0]) / chunks[0])))
+        for j in range(int(math.ceil(float(shape[1]) / chunks[1])))
+    ]
+    return func, chunk_indices
