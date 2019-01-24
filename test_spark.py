@@ -38,32 +38,35 @@ class TestSpark(unittest.TestCase):
     def tearDownClass(cls):
         cls.spark.stop()
 
-    def test_init_current_graph(self):
-        data = np.array([[-1, -1], [-2, -1], [-3, -2], [1, 1], [2, 1], [3, 2]])
-        n_neighbors = 2
-
-        current_graph = spark.init_current_graph(data, n_neighbors, spark.get_rng_state(42))
-        current_graph_rdd = spark.init_current_graph_rdd(self.sc, data, n_neighbors, spark.get_rng_state(42))
-        current_graph_rdd_materialized = densify(from_rdd_sparse(current_graph_rdd))
-
-        assert_allclose(current_graph_rdd_materialized, current_graph)
-
-    # def test_build_candidates(self):
+    # def test_init_current_graph(self):
     #     data = np.array([[-1, -1], [-2, -1], [-3, -2], [1, 1], [2, 1], [3, 2]])
-    #     n_vertices = data.shape[0]
     #     n_neighbors = 2
-    #     max_candidates = 8
     #
     #     current_graph = spark.init_current_graph(data, n_neighbors, spark.get_rng_state(42))
-    #     new_candidate_neighbors, old_candidate_neighbors =\
-    #         utils.build_candidates(current_graph, n_vertices, n_neighbors, max_candidates, spark.get_rng_state(42))
-    #
     #     current_graph_rdd = spark.init_current_graph_rdd(self.sc, data, n_neighbors, spark.get_rng_state(42))
-    #     new_candidate_neighbors_spark, old_candidate_neighbors_spark =\
-    #         spark.build_candidates(self.sc, current_graph_rdd, n_vertices, n_neighbors, max_candidates, spark.get_rng_state(42))
+    #     current_graph_rdd_materialized = densify(from_rdd_sparse(current_graph_rdd))
     #
-    #     assert_allclose(new_candidate_neighbors_spark, new_candidate_neighbors)
-    #     assert_allclose(old_candidate_neighbors_spark, old_candidate_neighbors)
+    #     assert_allclose(current_graph_rdd_materialized, current_graph)
+
+    def test_build_candidates(self):
+        data = np.array([[-1, -1], [-2, -1], [-3, -2], [1, 1], [2, 1], [3, 2]])
+        n_vertices = data.shape[0]
+        n_neighbors = 2
+        max_candidates = 8
+
+        current_graph = spark.init_current_graph(data, n_neighbors, spark.get_rng_state(42))
+        new_candidate_neighbors, old_candidate_neighbors =\
+            utils.build_candidates(current_graph, n_vertices, n_neighbors, max_candidates, spark.get_rng_state(42))
+
+        current_graph_rdd = spark.init_current_graph_rdd(self.sc, data, n_neighbors, spark.get_rng_state(42))
+        new_candidate_neighbors_spark, old_candidate_neighbors_spark =\
+            spark.build_candidates_rdd(self.sc, current_graph_rdd, n_vertices, n_neighbors, max_candidates, spark.get_rng_state(42))
+
+        new_candidate_neighbors_spark_materialized = densify(from_rdd_sparse(new_candidate_neighbors_spark))
+        old_candidate_neighbors_spark_materialized = densify(from_rdd_sparse(old_candidate_neighbors_spark))
+
+        assert_allclose(new_candidate_neighbors_spark_materialized, new_candidate_neighbors)
+        assert_allclose(old_candidate_neighbors_spark_materialized, old_candidate_neighbors)
     #
     # def test_nn_descent(self):
     #     data = np.array([[-1, -1], [-2, -1], [-3, -2], [1, 1], [2, 1], [3, 2]])
