@@ -149,9 +149,21 @@ def heap_push_sparse(heap, row, weight, index, flag):
 
     return 1
 
-def densify(heap):
-    # This should not be used (except for debugging) since it doesn't fill in empty rows correctly
-    return np.stack([heap[i].toarray() for i in (0, 1, 2)])
+def rows_in_sparse(heap_sparse):
+    if len(heap_sparse) == 4: # row information is last item in tuple
+        return heap_sparse[3]
+    else: # CSR format where row information is implicit
+        indptr = heap_sparse[0].indptr
+        return [i for i in range(len(indptr) - 1) if indptr[i] != indptr[i+1]]
+
+def densify(heap_sparse):
+    shape = heap_sparse[0].shape
+    heap = make_heap(shape[0], shape[1])
+    for i in rows_in_sparse(heap_sparse):
+        heap[0, i] = heap_sparse[0].getrowview(i).toarray()
+        heap[1, i] = heap_sparse[1].getrowview(i).toarray()
+        heap[2, i] = heap_sparse[2].getrowview(i).toarray()
+    return heap
 
 def merge_heaps_sparse(heap1_dense, heap2_sparse):
     # TODO: check heaps have the same size

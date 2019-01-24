@@ -19,6 +19,19 @@ def test_merge_heaps():
 
     assert_allclose(merge_heaps(heap1, heap2), heap)
 
+def test_densify():
+    heap = make_heap(5, 2)
+    heap_push(heap, 1, 6, 2, 0)
+    heap_push(heap, 1, 5, 3, 0)
+    heap_push(heap, 2, 5, 1, 0)
+
+    heap_sparse = make_heap_sparse(5, 2)
+    heap_push_sparse(heap_sparse, 1, 6, 2, 0)
+    heap_push_sparse(heap_sparse, 1, 5, 3, 0)
+    heap_push_sparse(heap_sparse, 2, 5, 1, 0)
+
+    assert_allclose(densify(heap_sparse), heap)
+
 def test_merge_heaps_sparse():
     heap = make_heap(5, 2)
     heap_push(heap, 1, 6, 2, 0)
