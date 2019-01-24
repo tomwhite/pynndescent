@@ -165,16 +165,12 @@ def densify(heap_sparse):
         heap[2, i] = heap_sparse[2].getrowview(i).toarray()
     return heap
 
-def merge_heaps_sparse(heap1_dense, heap2_sparse):
+def merge_heaps_dense_sparse(heap1_dense, heap2_sparse):
     # TODO: check heaps have the same size
     all_indices = heap2_sparse[0]
     all_weights = heap2_sparse[1]
     all_is_new = heap2_sparse[2]
-    if len(heap2_sparse) == 4: # row information is last item in tuple
-        rows = heap2_sparse[3]
-    else: # CSR format where row information is implicit
-        rows = [i for i in range(len(all_indices.indptr) - 1) if all_indices.indptr[i] != all_indices.indptr[i+1]]
-    for row in rows:
+    for row in rows_in_sparse(heap2_sparse):
         for ind in range(all_indices.shape[1]):
             index = all_indices[row, ind]
             weight = all_weights[row, ind]

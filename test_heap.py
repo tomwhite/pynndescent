@@ -44,7 +44,7 @@ def test_merge_heaps_sparse():
     heap_push_sparse(heap_sparse, 2, 5, 1, 0)
 
     heap_sparse_densified = make_heap(5, 2)
-    merge_heaps_sparse(heap_sparse_densified, heap_sparse)
+    merge_heaps_dense_sparse(heap_sparse_densified, heap_sparse)
 
     assert_allclose(heap_sparse_densified, heap)
 
@@ -63,6 +63,6 @@ def test_merge_heaps_sparse_csr():
     heap_sparse_csr = next(chunk_heap_sparse(heap_sparse, (5, 2)))
 
     heap_sparse_densified = make_heap(5, 2)
-    merge_heaps_sparse(heap_sparse_densified, heap_sparse_csr)
+    merge_heaps_dense_sparse(heap_sparse_densified, heap_sparse_csr)
 
     assert_allclose(heap_sparse_densified, heap)
