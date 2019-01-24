@@ -178,6 +178,19 @@ def merge_heaps_dense_sparse(heap1_dense, heap2_sparse):
             heap_push(heap1_dense, row, weight, index, flag)
     return heap1_dense
 
+def merge_heaps_sparse(heap1_sparse, heap2_sparse):
+    # TODO: check heaps have the same size
+    all_indices = heap2_sparse[0]
+    all_weights = heap2_sparse[1]
+    all_is_new = heap2_sparse[2]
+    for row in rows_in_sparse(heap2_sparse):
+        for ind in range(all_indices.shape[1]):
+            index = all_indices[row, ind]
+            weight = all_weights[row, ind]
+            flag = all_is_new[row, ind]
+            heap_push_sparse(heap1_sparse, row, weight, index, flag)
+    return heap1_sparse
+
 def chunk_heap_sparse(heap_sparse, chunks):
     # converts to CSR as a side-effect, which keeps row information
     shape = heap_sparse[0].shape
