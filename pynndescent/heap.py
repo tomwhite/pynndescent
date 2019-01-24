@@ -56,6 +56,12 @@ def make_heap_sparse(n_points, size):
     rows = set() # which rows have been created
     return indices, weights, is_new, rows
 
+def print_heap_sparse(heap):
+    print("indices", heap[0].toarray())
+    print("weights", heap[1].toarray())
+    print("is_new", heap[2].toarray())
+    print("rows", heap[3])
+
 def heap_push_sparse(heap, row, weight, index, flag):
     """Push a new element onto the heap. The heap stores potential neighbors
     for each data point. The ``row`` parameter determines which data point we

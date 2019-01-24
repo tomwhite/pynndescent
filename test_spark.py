@@ -7,6 +7,7 @@ from numpy.testing import assert_allclose
 from pyspark.sql import SparkSession
 
 from pynndescent import distances
+from pynndescent.heap import print_heap_sparse
 from pynndescent import pynndescent_
 from pynndescent import utils
 from pynndescent import spark
@@ -46,7 +47,8 @@ class TestSpark(unittest.TestCase):
 
         print("current graph", current_graph)
 
-        print("current_graph_rdd.collect()", current_graph_rdd.collect())
+        for cg in current_graph_rdd.collect():
+            print_heap_sparse(cg)
 
         # current_graph_rdd_materialized = np.hstack(current_graph_rdd.collect())
         #
