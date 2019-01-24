@@ -172,7 +172,7 @@ def merge_heaps_sparse(heap1_dense, heap2_sparse):
 
 def chunk_heap_sparse(heap_sparse, chunks):
     # converts to CSR as a side-effect, which keeps row information
-    shape = heap_sparse[1].shape
+    shape = heap_sparse[0].shape
     chunk_indices = [
         (i, j)
         for i in range(int(math.ceil(float(shape[0]) / chunks[0])))
@@ -183,7 +183,7 @@ def chunk_heap_sparse(heap_sparse, chunks):
 
 def read_heap_chunks_sparse(heap_sparse, chunks):
     # TODO: refactor to reduce duplication with chunk_heap_sparse
-    shape = heap_sparse[1].shape
+    shape = heap_sparse[0].shape
     def func(chunk_index):
         return tuple(heap_sparse[i][chunks[0] * chunk_index[0] : chunks[0] * (chunk_index[0] + 1)].tocsr() for i in (0, 1, 2))
     chunk_indices = [
