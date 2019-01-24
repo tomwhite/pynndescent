@@ -82,7 +82,6 @@ def init_current_graph_rdd(sc, data, n_neighbors, rng_state):
             n_vertices_part = current_graph_part.shape[1]
             # Each part has its own heap for the current graph, which
             # are combined in the reduce stage.
-            current_graph_local = make_heap(n_vertices, n_neighbors)
             current_graph_local_sparse = make_heap_sparse(n_vertices, n_neighbors)
             for i in range(n_vertices_part):
                 iabs = i + offset
@@ -90,18 +89,10 @@ def init_current_graph_rdd(sc, data, n_neighbors, rng_state):
                 indices = rejection_sample2(n_neighbors, n_vertices, r)
                 for j in range(indices.shape[0]):
                     d = dist(data[iabs], data[indices[j]])
-                    heap_push(current_graph_local, iabs, d, indices[j], 1)
-                    heap_push(current_graph_local, indices[j], d, iabs, 1)
                     heap_push_sparse(current_graph_local_sparse, iabs, d, indices[j], 1)
                     heap_push_sparse(current_graph_local_sparse, indices[j], d, iabs, 1)
 
             # Split current_graph into chunks and return each chunk keyed by its index.
-
-            # TODO: don't densify, since some rows are unitialized. Instead, merge into a dense heap
-            current_graph_local_from_sparse = densify(current_graph_local_sparse)
-            # print("current_graph_local", current_graph_local)
-            # print("current_graph_local_from_sparse", current_graph_local_from_sparse)
-            # print("equal?", current_graph_local == current_graph_local_from_sparse)
             read_chunk_func_new, chunk_indices = read_heap_chunks_sparse(current_graph_local_sparse, current_graph_chunks)
             for i, chunk_index in enumerate(chunk_indices):
                 yield i, read_chunk_func_new(chunk_index)
