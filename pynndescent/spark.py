@@ -217,9 +217,11 @@ def nn_descent(sc, data, n_neighbors, rng_state, max_candidates=50,
                             c += heap_push(current_graph, q, d, p, 1)
 
                 # Split current_graph into chunks and return each chunk keyed by its index.
-                read_chunk_func_new, chunk_indices = read_chunks(current_graph, current_graph_chunks)
+                read_chunk_func, chunk_indices = read_chunks(current_graph, current_graph_chunks)
                 for i, chunk_index in enumerate(chunk_indices):
-                    yield i, read_chunk_func_new(chunk_index)
+                    chunk = read_chunk_func(chunk_index)
+                    if chunk.nnz > 0: # only return chunks with no zeros
+                        yield i, chunk
 
         current_graph_rdd_updates = candidate_neighbors_combined\
             .mapPartitionsWithIndex(nn_descent_for_each_part)\
