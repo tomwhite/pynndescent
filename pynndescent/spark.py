@@ -73,7 +73,7 @@ def init_current_graph_rdd(sc, data, n_neighbors, rng_state):
     n_vertices = data.shape[0]
     chunk_size = 4
     current_graph_rdd = make_heap_rdd(sc, n_vertices, n_neighbors, chunk_size)
-    current_graph_chunks = (3, chunk_size, n_neighbors) # 3 is first heap dimension
+    current_graph_chunks = (chunk_size, n_neighbors)
 
     def init_current_graph_for_each_part(index, iterator):
         r = np.random.RandomState()
@@ -99,16 +99,16 @@ def init_current_graph_rdd(sc, data, n_neighbors, rng_state):
 
             # TODO: don't densify, since some rows are unitialized. Instead, merge into a dense heap
             current_graph_local_from_sparse = densify(current_graph_local_sparse)
-            print("current_graph_local", current_graph_local)
-            print("current_graph_local_from_sparse", current_graph_local_from_sparse)
-            print("equal?", current_graph_local == current_graph_local_from_sparse)
-            read_chunk_func_new, chunk_indices = read_chunks(current_graph_local, current_graph_chunks)
+            # print("current_graph_local", current_graph_local)
+            # print("current_graph_local_from_sparse", current_graph_local_from_sparse)
+            # print("equal?", current_graph_local == current_graph_local_from_sparse)
+            read_chunk_func_new, chunk_indices = read_heap_chunks_sparse(current_graph_local_sparse, current_graph_chunks)
             for i, chunk_index in enumerate(chunk_indices):
                 yield i, read_chunk_func_new(chunk_index)
 
     return current_graph_rdd \
         .mapPartitionsWithIndex(init_current_graph_for_each_part) \
-        .reduceByKey(merge_heaps) \
+        .reduceByKey(merge_heaps_sparse) \
         .values()
 
 def build_candidates_rdd(sc, current_graph_rdd, n_vertices, n_neighbors, max_candidates,
