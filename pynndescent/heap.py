@@ -163,5 +163,13 @@ def densify0(heap):
 #     ]
 #     return func, chunk_indices
 #
-# def merge_heaps_sparse(heap1_dense, heap2_sparse):
-#     pass
+def merge_heaps_sparse(heap1_dense, heap2_sparse):
+    # TODO: check heaps have the same size
+    s = heap2_sparse[1].shape
+    for row in heap2_sparse[0]:
+        for ind in range(s[1]):
+            index = heap2_sparse[1][row, ind]
+            weight = heap2_sparse[2][row, ind]
+            flag = heap2_sparse[3][row, ind]
+            heap_push(heap1_dense, row, weight, index, flag)
+    return heap1_dense
