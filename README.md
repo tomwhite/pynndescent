@@ -112,6 +112,39 @@ In the distributed implementation, the candidate neighbors heaps are partitioned
 and each chunk processed in its own partition. A distributed heap is used to
 update the state of the graph using a MapReduce operation.
 
+### Sparse arrays
+
+Sparse arrays are used for heap updates in MapReduce. The following table
+lists the desired properties of sparse arrays for this purpose.
+
+| Property         | Dictionary Of Keys | COOrdinate         | LInked List        | Compressed Sparse Row |
+| ---------------- | ------------------ | ------------------ | ------------------ | --------------------- |
+| Sparse rows      | :white_check_mark: | :white_check_mark: | :x:                | :white_check_mark:    |
+| `vstack`         | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark:    |
+| Address by index | :white_check_mark: | :x:                | :white_check_mark: | :white_check_mark:    |
+| Updateable       | :white_check_mark: | :white_check_mark: | :white_check_mark: | :x:                   |
+| Row view         | :x:                | ?                  | :white_check_mark: | ?                     |
+| Fill value       | :x:                | :x:                | :x:                | :x:                   |
+| 3D               | :x:                | :x:                | :x:                | :x:                   |
+
+- Sparse rows: no storage is used for empty rows. This is not
+the case for LIL, since an empty list is stored for empty rows.
+- `vstack`: ability to vertically stack chunks of sparse arrays together
+- Address by index:
+- Updateable: ability to insert new data at an arbitrary row
+- Row view: retrieve a whole row by index
+- Fill value - specify a default fill value
+- 3D - support three dimensions
+
+None of the `scipy.sparse` implementations support fill values or 3D matrices.
+
+`pydata.sparse` supports fill values and 3D matrices, however I don't know how it does
+on the other features.
+
+### Sparse arrays and chunking
+
+TBC
+
 ### Usage
 
 ```
