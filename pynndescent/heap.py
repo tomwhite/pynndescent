@@ -182,6 +182,9 @@ def densify(heap_sparse):
             heap[2, i, j] = heap_sparse[2][i, j]
     return heap
 
+def densify_pair(pair):
+    return densify(pair[0]), densify(pair[1])
+
 def merge_heaps_dense_sparse(heap1_dense, heap2_sparse):
     # TODO: check heaps have the same size
     all_indices = heap2_sparse[0]
