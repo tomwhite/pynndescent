@@ -117,15 +117,15 @@ update the state of the graph using a MapReduce operation.
 Sparse arrays are used for heap updates in MapReduce. The following table
 lists the desired properties of sparse arrays for this purpose.
 
-| Property         | Dictionary Of Keys | COOrdinate         | LInked List        | Compressed Sparse Row |
-| ---------------- | ------------------ | ------------------ | ------------------ | --------------------- |
-| Subscriptable    | :white_check_mark: | :x:                | :white_check_mark: | :white_check_mark:    |
-| Item assignment  | :white_check_mark: | :x:                | :white_check_mark: | :white_check_mark:    |
-| `vstack`         | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark:    |
-| Sparse rows      | :white_check_mark: | :white_check_mark: | :x:                | :white_check_mark:    |
-| Row view         | :x:                | :x:                | :white_check_mark: | :x:                   |
-| Fill value       | :x:                | :x:                | :x:                | :x:                   |
-| 3D               | :x:                | :x:                | :x:                | :x:                   |
+| Property         | Dictionary Of Keys | COOrdinate         | LInked List        | Compressed Sparse Row | pydata.sparse.DOK  |
+| ---------------- | ------------------ | ------------------ | ------------------ | --------------------- | ------------------ |
+| Subscriptable    | :white_check_mark: | :x:                | :white_check_mark: | :white_check_mark:    | :white_check_mark: |
+| Item assignment  | :white_check_mark: | :x:                | :white_check_mark: | :white_check_mark:    | :white_check_mark: |
+| `vstack`         | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark:    | :white_check_mark: |
+| Sparse rows      | :white_check_mark: | :white_check_mark: | :x:                | :white_check_mark:    | :white_check_mark: |
+| Row view         | :x:                | :x:                | :white_check_mark: | :x:                   | :x:                |
+| Fill value       | :x:                | :x:                | :x:                | :x:                   | :white_check_mark: |
+| 3D               | :x:                | :x:                | :x:                | :x:                   | :white_check_mark: |
 
 - Subscriptable: ability to access an entry by index, e.g. `A[i, j]`
 - Item assignment: ability to update an entry by index, e.g. `A[i, j] = x`
@@ -139,10 +139,12 @@ the case for LIL, since an empty list is stored for empty rows.
 CSR arrays are subscriptable and support item assignment, but it's expensive
 so shouldn't be used to build sparse matrices.
 
-None of the `scipy.sparse` implementations support fill values or 3D matrices.
+None of the `scipy.sparse` implementations support fill values or 3D matrices,
+but the `pydata.sparse` implementations do.
 
-`pydata.sparse` supports fill values and 3D matrices, however I don't know how it does
-on the other features.
+Summary: DOK is the only sparse implementation that is appropriate for doing
+heap updates. (COO and CSR don't do efficient updates, and LIL is not space
+efficient since it stores an empty list for empty rows.)
 
 ### Sparse arrays and chunking
 
