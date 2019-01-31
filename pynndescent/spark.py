@@ -98,7 +98,7 @@ def init_current_graph_rdd(sc, data, n_neighbors):
         .reduceByKey(merge_heaps) \
         .values()
 
-def build_candidates_rdd(sc, current_graph_rdd, n_vertices, n_neighbors, max_candidates,
+def build_candidates_rdd(current_graph_rdd, n_vertices, n_neighbors, max_candidates,
                      rng_state, rho=0.5):
     chunk_size = 4
     candidate_chunks = (3, chunk_size, max_candidates) # 3 is first heap dimension
@@ -109,7 +109,6 @@ def build_candidates_rdd(sc, current_graph_rdd, n_vertices, n_neighbors, max_can
             n_vertices_part = current_graph_part.shape[1]
             # Each part has its own heaps for old and new candidates, which
             # are combined in the reduce stage.
-            # (TODO: make these sparse - use COO (or maybe LIL) to construct, then convert to CSR to slice)
             new_candidate_neighbors = make_heap(n_vertices, max_candidates)
             old_candidate_neighbors = make_heap(n_vertices, max_candidates)
             for i in range(n_vertices_part):
