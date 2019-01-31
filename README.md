@@ -123,7 +123,6 @@ lists the desired properties of sparse arrays for this purpose.
 | Item assignment  | :white_check_mark: | :x:                | :white_check_mark: | :white_check_mark:*   | :white_check_mark: |
 | `vstack`         | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark:    | :white_check_mark: |
 | Sparse rows      | :white_check_mark: | :white_check_mark: | :x:                | :white_check_mark:    | :white_check_mark: |
-| Row view         | :x:                | :x:                | :white_check_mark: | :x:                   | :x:                |
 | Fill value       | :x:                | :x:                | :x:                | :x:                   | :white_check_mark: |
 | 3D               | :x:                | :x:                | :x:                | :x:                   | :white_check_mark: |
 
@@ -133,7 +132,6 @@ lists the desired properties of sparse arrays for this purpose.
 (also called `concatenate`)
 - Sparse rows: no storage is used for empty rows. This is not
 the case for LIL, since an empty list is stored for empty rows.
-- Row view: retrieve a whole row by index, which is then updatable
 - Fill value - specify a default fill value
 - 3D - support three dimensions
 

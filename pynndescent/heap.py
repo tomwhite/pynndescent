@@ -93,34 +93,30 @@ def heap_push_sparse(heap, row, weight, index, flag):
     -------
     success: The number of new elements successfully pushed into the heap.
     """
-    all_indices = heap[0]
-    all_weights = heap[1]
-    all_is_new = heap[2]
+    indices = heap[0]
+    weights = heap[1]
+    is_new = heap[2]
     rows = heap[3]
 
     if row not in rows:
         # initialize
-        all_indices[row] = -1
-        all_weights[row] = np.infty
-        all_is_new[row] = 0
+        indices[row] = -1
+        weights[row] = np.infty
+        is_new[row] = 0
         rows.add(row)
 
-    indices = all_indices.getrowview(row)
-    weights = all_weights.getrowview(row)
-    is_new = all_is_new.getrowview(row)
-
-    if weight >= weights[0,0]:
+    if weight >= weights[row,0]:
         return 0
 
     # break if we already have this element.
     for i in range(indices.shape[1]):
-        if index == indices[0,i]:
+        if index == indices[row,i]:
             return 0
 
     # insert val at position zero
-    weights[0,0] = weight
-    indices[0,0] = index
-    is_new[0,0] = flag
+    weights[row,0] = weight
+    indices[row,0] = index
+    is_new[row,0] = flag
 
     # descend the heap, swapping values until the max heap criterion is met
     i = 0
@@ -128,33 +124,33 @@ def heap_push_sparse(heap, row, weight, index, flag):
         ic1 = 2 * i + 1
         ic2 = ic1 + 1
 
-        if ic1 >= all_indices.shape[1]:
+        if ic1 >= indices.shape[1]:
             break
-        elif ic2 >= all_indices.shape[1]:
-            if weights[0,ic1] > weight:
+        elif ic2 >= indices.shape[1]:
+            if weights[row,ic1] > weight:
                 i_swap = ic1
             else:
                 break
-        elif weights[0,ic1] >= weights[0,ic2]:
-            if weight < weights[0,ic1]:
+        elif weights[row,ic1] >= weights[row,ic2]:
+            if weight < weights[row,ic1]:
                 i_swap = ic1
             else:
                 break
         else:
-            if weight < weights[0,ic2]:
+            if weight < weights[row,ic2]:
                 i_swap = ic2
             else:
                 break
 
-        weights[0,i] = weights[0,i_swap]
-        indices[0,i] = indices[0,i_swap]
-        is_new[0,i] = is_new[0,i_swap]
+        weights[row,i] = weights[row,i_swap]
+        indices[row,i] = indices[row,i_swap]
+        is_new[row,i] = is_new[row,i_swap]
 
         i = i_swap
 
-    weights[0,i] = weight
-    indices[0,i] = index
-    is_new[0,i] = flag
+    weights[row,i] = weight
+    indices[row,i] = index
+    is_new[row,i] = flag
 
     return 1
 
@@ -181,9 +177,10 @@ def densify(heap_sparse):
     shape = heap_sparse[0].shape
     heap = make_heap(shape[0], shape[1])
     for i in rows_in_sparse(heap_sparse):
-        heap[0, i] = heap_sparse[0].getrowview(i).toarray()
-        heap[1, i] = heap_sparse[1].getrowview(i).toarray()
-        heap[2, i] = heap_sparse[2].getrowview(i).toarray()
+        for j in range(shape[1]):
+            heap[0, i, j] = heap_sparse[0][i, j]
+            heap[1, i, j] = heap_sparse[1][i, j]
+            heap[2, i, j] = heap_sparse[2][i, j]
     return heap
 
 def merge_heaps_dense_sparse(heap1_dense, heap2_sparse):
