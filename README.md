@@ -112,6 +112,21 @@ In the distributed implementation, the candidate neighbors heaps are partitioned
 and each chunk processed in its own partition. A distributed heap is used to
 update the state of the graph using a MapReduce operation.
 
+### Distance data
+
+The data points are _not_ chunked in this algorithm. This is because when distances
+are computed (during initialization and update of the current graph) the points
+concerned are not constrained to the local chunk - they can be anywhere in the
+data.
+
+For this reason the data is distributed to all workers so they can compute distances.
+
+Note that PCA is typically run on the data first (to avoid the curse of dimensionality),
+so a 1 million row dataset with 50 dimensions would take around 400MB of storage.
+This size is very feasible to distribute (e.g. via Spark broadcast), but for much
+larger datasets alternative arrangements may be needed (e.g. load from Zarr storage
+in the cloud).
+
 ### Sparse arrays
 
 Sparse arrays are used for heap updates in MapReduce. The following table
@@ -144,10 +159,6 @@ but the `pydata.sparse` implementations do.
 Summary: DOK is the only sparse implementation that is appropriate for doing
 heap updates. COO and CSR don't support efficient inserts, and LIL is not space
 efficient since it stores an empty list for empty rows.
-
-### Sparse arrays and chunking
-
-TBC
 
 ### Usage
 

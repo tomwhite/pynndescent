@@ -64,15 +64,16 @@ def init_current_graph(data, n_neighbors):
 
     return current_graph
 
-def init_current_graph_rdd(sc, data, n_neighbors):
+def init_current_graph_rdd(sc, data_broadcast, data_shape, n_neighbors):
     dist = distances.named_distances['euclidean']
-    n_vertices = data.shape[0]
+    n_vertices = data_shape[0]
     chunk_size = 4
     current_graph_rdd = make_heap_rdd(sc, n_vertices, n_neighbors, chunk_size)
     current_graph_chunks = (3, chunk_size, n_neighbors) # 3 is first heap dimension
 
     def init_current_graph_for_each_part(index, iterator):
         r = np.random.RandomState()
+        data_local = data_broadcast.value
         offset = index * chunk_size
         for current_graph_part in iterator:
             n_vertices_part = current_graph_part.shape[1]
@@ -84,7 +85,7 @@ def init_current_graph_rdd(sc, data, n_neighbors):
                 r.seed(iabs)
                 indices = rejection_sample2(n_neighbors, n_vertices, r)
                 for j in range(indices.shape[0]):
-                    d = dist(data[iabs], data[indices[j]])
+                    d = dist(data_local[iabs], data_local[indices[j]])
                     heap_push(current_graph_local, iabs, d, indices[j], 1)
                     heap_push(current_graph_local, indices[j], d, iabs, 1)
 
@@ -104,6 +105,7 @@ def build_candidates_rdd(current_graph_rdd, n_vertices, n_neighbors, max_candida
     candidate_chunks = (3, chunk_size, max_candidates) # 3 is first heap dimension
 
     def build_candidates_for_each_part(index, iterator):
+        r = np.random.RandomState()
         offset = index * chunk_size
         for current_graph_part in iterator:
             n_vertices_part = current_graph_part.shape[1]
@@ -113,7 +115,6 @@ def build_candidates_rdd(current_graph_rdd, n_vertices, n_neighbors, max_candida
             old_candidate_neighbors = make_heap(n_vertices, max_candidates)
             for i in range(n_vertices_part):
                 iabs = i + offset
-                r = np.random.RandomState()
                 r.seed(iabs)
                 for j in range(n_neighbors):
                     if current_graph_part[0, i, j] < 0:
@@ -153,15 +154,17 @@ def nn_descent(sc, data, n_neighbors, rng_state, max_candidates=50,
 
     dist = distances.named_distances['euclidean']
 
+    data_broadcast = sc.broadcast(data)
+
     n_vertices = data.shape[0]
     chunk_size = 4
     current_graph_chunks = (3, chunk_size, n_neighbors) # 3 is first heap dimension
 
-    current_graph_rdd = init_current_graph_rdd(sc, data, n_neighbors)
+    current_graph_rdd = init_current_graph_rdd(sc, data_broadcast, data.shape, n_neighbors)
 
     for n in range(n_iters):
 
-        candidate_neighbors_combined = build_candidates_rdd(sc, current_graph_rdd,
+        candidate_neighbors_combined = build_candidates_rdd(current_graph_rdd,
                                                      n_vertices,
                                                      n_neighbors,
                                                      max_candidates,
@@ -169,7 +172,7 @@ def nn_descent(sc, data, n_neighbors, rng_state, max_candidates=50,
 
 
         def nn_descent_for_each_part(index, iterator):
-            offset = index * chunk_size
+            data_local = data_broadcast.value
             for candidate_neighbors_combined_part in iterator:
                 new_candidate_neighbors_part, old_candidate_neighbors_part = candidate_neighbors_combined_part
                 n_vertices_part = new_candidate_neighbors_part.shape[1]
@@ -187,7 +190,7 @@ def nn_descent(sc, data, n_neighbors, rng_state, max_candidates=50,
                             if q < 0:
                                 continue
 
-                            d = dist(data[p], data[q])
+                            d = dist(data_local[p], data_local[q])
                             c += heap_push(current_graph_local, p, d, q, 1)
                             c += heap_push(current_graph_local, q, d, p, 1)
 
@@ -196,7 +199,7 @@ def nn_descent(sc, data, n_neighbors, rng_state, max_candidates=50,
                             if q < 0:
                                 continue
 
-                            d = dist(data[p], data[q])
+                            d = dist(data_local[p], data_local[q])
                             c += heap_push(current_graph_local, p, d, q, 1)
                             c += heap_push(current_graph_local, q, d, p, 1)
 

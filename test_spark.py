@@ -40,10 +40,11 @@ class TestSpark(unittest.TestCase):
 
     def test_init_current_graph(self):
         data = np.array([[-1, -1], [-2, -1], [-3, -2], [1, 1], [2, 1], [3, 2]])
+        data_broadcast = self.sc.broadcast(data)
         n_neighbors = 2
 
         current_graph = spark.init_current_graph(data, n_neighbors)
-        current_graph_rdd = spark.init_current_graph_rdd(self.sc, data, n_neighbors)
+        current_graph_rdd = spark.init_current_graph_rdd(self.sc, data_broadcast, data.shape, n_neighbors)
 
         current_graph_rdd_materialized = from_rdd(current_graph_rdd)
 
@@ -51,6 +52,7 @@ class TestSpark(unittest.TestCase):
 
     def test_build_candidates(self):
         data = np.array([[-1, -1], [-2, -1], [-3, -2], [1, 1], [2, 1], [3, 2]])
+        data_broadcast = self.sc.broadcast(data)
         n_vertices = data.shape[0]
         n_neighbors = 2
         max_candidates = 8
@@ -59,9 +61,9 @@ class TestSpark(unittest.TestCase):
         new_candidate_neighbors, old_candidate_neighbors =\
             utils.build_candidates(current_graph, n_vertices, n_neighbors, max_candidates, rng_state=None)
 
-        current_graph_rdd = spark.init_current_graph_rdd(self.sc, data, n_neighbors)
+        current_graph_rdd = spark.init_current_graph_rdd(self.sc, data_broadcast, data.shape, n_neighbors)
         candidate_neighbors_combined_rdd = \
-            spark.build_candidates_rdd(self.sc, current_graph_rdd, n_vertices, n_neighbors, max_candidates, rng_state=None)
+            spark.build_candidates_rdd(current_graph_rdd, n_vertices, n_neighbors, max_candidates, rng_state=None)
 
         candidate_neighbors_combined = candidate_neighbors_combined_rdd.collect()
         new_candidate_neighbors_spark = np.hstack([pair[0] for pair in candidate_neighbors_combined])
