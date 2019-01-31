@@ -44,11 +44,7 @@ def to_local_rows(sc, arr, chunks):
 
 # NNDescent algorithm
 
-def get_rng_state(random_state):
-    random_state = check_random_state(random_state)
-    return random_state.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
-
-def init_current_graph(data, n_neighbors, rng_state):
+def init_current_graph(data, n_neighbors):
     # This is just a copy from make_nn_descent -> nn_descent
     r = np.random.RandomState()
 
@@ -68,7 +64,7 @@ def init_current_graph(data, n_neighbors, rng_state):
 
     return current_graph
 
-def init_current_graph_rdd(sc, data, n_neighbors, rng_state):
+def init_current_graph_rdd(sc, data, n_neighbors):
     dist = distances.named_distances['euclidean']
     n_vertices = data.shape[0]
     chunk_size = 4
@@ -162,7 +158,7 @@ def nn_descent(sc, data, n_neighbors, rng_state, max_candidates=50,
     chunk_size = 4
     current_graph_chunks = (3, chunk_size, n_neighbors) # 3 is first heap dimension
 
-    current_graph_rdd = init_current_graph_rdd(sc, data, n_neighbors, rng_state)
+    current_graph_rdd = init_current_graph_rdd(sc, data, n_neighbors)
 
     for n in range(n_iters):
 
