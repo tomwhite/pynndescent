@@ -242,9 +242,10 @@ def chunk_heap_sparse(heap_sparse, chunks):
     for chunk_index in chunk_indices:
         yield tuple(heap_sparse[i][chunks[0] * chunk_index[0] : chunks[0] * (chunk_index[0] + 1)].tocsr() for i in (0, 1, 2))
 
-def read_heap_chunks_sparse(heap_sparse, chunks):
+def read_heap_chunks_sparse(heap_sparse, chunks_3d):
     # TODO: refactor to reduce duplication with/similarity to chunk_heap_sparse
     shape = heap_sparse[0].shape
+    chunks = chunks_3d[1:]
     def func(chunk_index):
         row_start = chunks[0] * chunk_index[0]
         row_end = chunks[0] * (chunk_index[0] + 1)
