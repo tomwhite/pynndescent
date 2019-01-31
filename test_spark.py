@@ -60,8 +60,12 @@ class TestSpark(unittest.TestCase):
             utils.build_candidates(current_graph, n_vertices, n_neighbors, max_candidates, spark.get_rng_state(42))
 
         current_graph_rdd = spark.init_current_graph_rdd(self.sc, data, n_neighbors, spark.get_rng_state(42))
-        new_candidate_neighbors_spark, old_candidate_neighbors_spark =\
-            spark.build_candidates(self.sc, current_graph_rdd, n_vertices, n_neighbors, max_candidates, spark.get_rng_state(42))
+        candidate_neighbors_combined_rdd = \
+            spark.build_candidates_rdd(self.sc, current_graph_rdd, n_vertices, n_neighbors, max_candidates, spark.get_rng_state(42))
+
+        candidate_neighbors_combined = candidate_neighbors_combined_rdd.collect()
+        new_candidate_neighbors_spark = np.hstack([pair[0] for pair in candidate_neighbors_combined])
+        old_candidate_neighbors_spark = np.hstack([pair[1] for pair in candidate_neighbors_combined])
 
         assert_allclose(new_candidate_neighbors_spark, new_candidate_neighbors)
         assert_allclose(old_candidate_neighbors_spark, old_candidate_neighbors)

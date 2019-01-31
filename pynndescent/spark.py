@@ -152,17 +152,6 @@ def build_candidates_rdd(sc, current_graph_rdd, n_vertices, n_neighbors, max_can
 
     return candidate_neighbors_combined
 
-
-def build_candidates(sc, current_graph_rdd, n_vertices, n_neighbors, max_candidates,
-                     rng_state, rho=0.5):
-    candidate_neighbors_combined = build_candidates_rdd(sc, current_graph_rdd, n_vertices, n_neighbors, max_candidates, rng_state, rho).collect()
-
-    # stack results (this should really be materialized to a store, e.g. as Zarr)
-    new_candidate_neighbors_combined = np.hstack([pair[0] for pair in candidate_neighbors_combined])
-    old_candidate_neighbors_combined = np.hstack([pair[1] for pair in candidate_neighbors_combined])
-
-    return new_candidate_neighbors_combined, old_candidate_neighbors_combined
-
 def nn_descent(sc, data, n_neighbors, rng_state, max_candidates=50,
                n_iters=10, delta=0.001, rho=0.5,
                rp_tree_init=False, leaf_array=None, verbose=False):
