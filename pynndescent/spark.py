@@ -180,7 +180,7 @@ def nn_descent(sc, data, n_neighbors, rng_state, max_candidates=50,
                 n_vertices_part = new_candidate_neighbors_part.shape[1]
                 # Each part has its own heaps for the current graph, which
                 # are combined in the reduce stage.
-                current_graph = make_heap(n_vertices, n_neighbors)
+                current_graph_local = make_heap(n_vertices, n_neighbors)
                 c = 0 # not used yet (needs combining across all partitions)
                 for i in range(n_vertices_part):
                     for j in range(max_candidates):
@@ -193,8 +193,8 @@ def nn_descent(sc, data, n_neighbors, rng_state, max_candidates=50,
                                 continue
 
                             d = dist(data[p], data[q])
-                            c += heap_push(current_graph, p, d, q, 1)
-                            c += heap_push(current_graph, q, d, p, 1)
+                            c += heap_push(current_graph_local, p, d, q, 1)
+                            c += heap_push(current_graph_local, q, d, p, 1)
 
                         for k in range(max_candidates):
                             q = int(old_candidate_neighbors_part[0, i, k])
@@ -202,11 +202,11 @@ def nn_descent(sc, data, n_neighbors, rng_state, max_candidates=50,
                                 continue
 
                             d = dist(data[p], data[q])
-                            c += heap_push(current_graph, p, d, q, 1)
-                            c += heap_push(current_graph, q, d, p, 1)
+                            c += heap_push(current_graph_local, p, d, q, 1)
+                            c += heap_push(current_graph_local, q, d, p, 1)
 
                 # Split current_graph into chunks and return each chunk keyed by its index.
-                read_chunk_func, chunk_indices = read_chunks(current_graph, current_graph_chunks)
+                read_chunk_func, chunk_indices = read_chunks(current_graph_local, current_graph_chunks)
                 for i, chunk_index in enumerate(chunk_indices):
                     yield i, read_chunk_func(chunk_index)
 
