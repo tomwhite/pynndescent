@@ -49,8 +49,7 @@ After all the updates have been applied to the temporary sparse heap for a given
 partition, the heap must be chunked (using the same chunking as the original
 distributed heap) into a series of sparse heap chunks. This results in a set of
 `(index, sparse heap chunk)` pairs, where the index is the index of the sparse
-heap chunk in the array. These pairs are emitted by the Map. If a sparse
-heap chunk is empty for a given index then it is not emitted by the Map.
+heap chunk in the array. These pairs are emitted by the Map.
 
 These pairs are shuffled by the key (the index), and the Reduce combines all the
 sparse heap chunks for a given index, including the chunk for that index
