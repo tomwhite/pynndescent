@@ -50,8 +50,12 @@ def from_rdd(heap_rdd):
 
 def make_heap_sparse(n_points, size):
     # scipy.sparse only supports 2D matrices, so we have one for each of the
-    # three positions in the first axis
-    # TODO: write own sparse array (3D too?) that is row-wise, but only stores populated rows
+    # three positions in the first axis.
+    # Even if we used pydata.sparse arrays (which support 3D) we couldn't use
+    # fill values since each slice has different fill values.
+    # Note that we need to keep track of populated rows in order to do filling,
+    # but also to do efficient merging of sparse arrays.
+    # TODO: write own sparse array (3D too?) that is row-oriented, but only stores populated rows - Dictionary Of Rows
     indices = scipy.sparse.dok_matrix((n_points, size))
     weights = scipy.sparse.dok_matrix((n_points, size))
     is_new = scipy.sparse.dok_matrix((n_points, size))
