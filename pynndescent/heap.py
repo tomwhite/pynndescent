@@ -3,7 +3,18 @@ import math
 import numpy as np
 import scipy.sparse
 
-from pynndescent.utils import *
+from pynndescent import utils
+
+# support dense and sparse heaps
+def make_heap(n_points, size, sparse=False):
+    if sparse:
+        return make_heap_sparse(n_points, size)
+    return utils.make_heap(n_points, size)
+
+def heap_push(heap, row, weight, index, flag):
+    if isinstance(heap, tuple):
+        return heap_push_sparse(heap, row, weight, index, flag)
+    return utils.heap_push(heap, row, weight, index, flag)
 
 # Distributed heap functions
 # Distributed heaps can only be created and merged. Heap push is a local

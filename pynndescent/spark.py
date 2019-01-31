@@ -6,7 +6,7 @@ from sklearn.utils import check_random_state
 
 from pynndescent import distances
 from pynndescent.heap import *
-from pynndescent.utils import *
+from pynndescent.utils import deheap_sort, rejection_sample2
 
 INT32_MIN = np.iinfo(np.int32).min + 1
 INT32_MAX = np.iinfo(np.int32).max - 1
