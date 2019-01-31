@@ -119,22 +119,25 @@ lists the desired properties of sparse arrays for this purpose.
 
 | Property         | Dictionary Of Keys | COOrdinate         | LInked List        | Compressed Sparse Row |
 | ---------------- | ------------------ | ------------------ | ------------------ | --------------------- |
-| Sparse rows      | :white_check_mark: | :white_check_mark: | :x:                | :white_check_mark:    |
+| Subscriptable    | :white_check_mark: | :x:                | :white_check_mark: | :white_check_mark:    |
+| Item assignment  | :white_check_mark: | :x:                | :white_check_mark: | :white_check_mark:    |
 | `vstack`         | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark:    |
-| Address by index | :white_check_mark: | :x:                | :white_check_mark: | :white_check_mark:    |
-| Updateable       | :white_check_mark: | :white_check_mark: | :white_check_mark: | :x:                   |
-| Row view         | :x:                | ?                  | :white_check_mark: | ?                     |
+| Sparse rows      | :white_check_mark: | :white_check_mark: | :x:                | :white_check_mark:    |
+| Row view         | :x:                | :x:                | :white_check_mark: | :x:                   |
 | Fill value       | :x:                | :x:                | :x:                | :x:                   |
 | 3D               | :x:                | :x:                | :x:                | :x:                   |
 
+- Subscriptable: ability to access an entry by index, e.g. `A[i, j]`
+- Item assignment: ability to update an entry by index, e.g. `A[i, j] = x`
+- `vstack`: ability to vertically stack chunks of sparse arrays together
 - Sparse rows: no storage is used for empty rows. This is not
 the case for LIL, since an empty list is stored for empty rows.
-- `vstack`: ability to vertically stack chunks of sparse arrays together
-- Address by index:
-- Updateable: ability to insert new data at an arbitrary row
-- Row view: retrieve a whole row by index
+- Row view: retrieve a whole row by index, which is then updatable
 - Fill value - specify a default fill value
 - 3D - support three dimensions
+
+CSR arrays are subscriptable and support item assignment, but it's expensive
+so shouldn't be used to build sparse matrices.
 
 None of the `scipy.sparse` implementations support fill values or 3D matrices.
 
