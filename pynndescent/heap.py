@@ -51,11 +51,10 @@ def from_rdd(heap_rdd):
 def make_heap_sparse(n_points, size):
     # scipy.sparse only supports 2D matrices, so we have one for each of the
     # three positions in the first axis
-    # TODO: lil_matrix isn't sparse enough since it stores an empty list for every row
     # TODO: write own sparse array (3D too?) that is row-wise, but only stores populated rows
-    indices = scipy.sparse.lil_matrix((n_points, size))
-    weights = scipy.sparse.lil_matrix((n_points, size))
-    is_new = scipy.sparse.lil_matrix((n_points, size))
+    indices = scipy.sparse.dok_matrix((n_points, size))
+    weights = scipy.sparse.dok_matrix((n_points, size))
+    is_new = scipy.sparse.dok_matrix((n_points, size))
     rows = set() # which rows have been created
     return indices, weights, is_new, rows
 
@@ -168,9 +167,9 @@ def from_rdd_sparse(heap_sparse_rdd):
     for i, heap_chunk in enumerate(heap_chunks):
         row_start = i * chunk_size
         rows.update([row + row_start for row in heap_chunk[3]])
-    weights = scipy.sparse.vstack([heap_chunk[0] for heap_chunk in heap_chunks], format="lil")
-    indices = scipy.sparse.vstack([heap_chunk[1] for heap_chunk in heap_chunks], format="lil")
-    is_new = scipy.sparse.vstack([heap_chunk[2] for heap_chunk in heap_chunks], format="lil")
+    weights = scipy.sparse.vstack([heap_chunk[0] for heap_chunk in heap_chunks], format="dok")
+    indices = scipy.sparse.vstack([heap_chunk[1] for heap_chunk in heap_chunks], format="dok")
+    is_new = scipy.sparse.vstack([heap_chunk[2] for heap_chunk in heap_chunks], format="dok")
     return weights, indices, is_new, rows
 
 def densify(heap_sparse):
