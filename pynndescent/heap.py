@@ -166,7 +166,7 @@ def from_rdd_sparse(heap_sparse_rdd):
     rows = set()
     for i, heap_chunk in enumerate(heap_chunks):
         row_start = i * chunk_size
-        rows.update([row + row_start for row in heap_chunk[3]])
+        rows.update([int(row + row_start) for row in heap_chunk[3]])
     weights = scipy.sparse.vstack([heap_chunk[0] for heap_chunk in heap_chunks], format="dok")
     indices = scipy.sparse.vstack([heap_chunk[1] for heap_chunk in heap_chunks], format="dok")
     is_new = scipy.sparse.vstack([heap_chunk[2] for heap_chunk in heap_chunks], format="dok")
@@ -208,6 +208,11 @@ def merge_heaps_sparse(heap1_sparse, heap2_sparse):
             heap_push_sparse(heap1_sparse, row, weight, index, flag)
     return heap1_sparse
 
+def merge_heap_pairs_sparse(heap_pair1_sparse, heap_pair2_sparse):
+    heap1_new_sparse, heap1_old_sparse = heap_pair1_sparse
+    heap2_new_sparse, heap2_old_sparse = heap_pair2_sparse
+    return merge_heaps_sparse(heap1_new_sparse, heap2_new_sparse), merge_heaps_sparse(heap1_old_sparse, heap2_old_sparse)
+
 def chunk_heap_sparse(heap_sparse, chunks):
     # converts to CSR as a side-effect, which keeps row information
     shape = heap_sparse[0].shape
@@ -225,7 +230,7 @@ def read_heap_chunks_sparse(heap_sparse, chunks):
     def func(chunk_index):
         row_start = chunks[0] * chunk_index[0]
         row_end = chunks[0] * (chunk_index[0] + 1)
-        rows = set([row - row_start for row in heap_sparse[3] if row_start <= row < row_end])
+        rows = set([int(row - row_start) for row in heap_sparse[3] if row_start <= row < row_end])
         return tuple(heap_sparse[i][chunks[0] * chunk_index[0] : chunks[0] * (chunk_index[0] + 1)] for i in (0, 1, 2)) + (rows,)
     chunk_indices = [
         (i, j)
