@@ -43,6 +43,9 @@ def merge_heaps(heap1, heap2):
             heap_push(heap, row, weight, index, flag)
     return heap
 
+def from_rdd(heap_rdd):
+    return np.hstack(heap_rdd.collect())
+
 # Sparse heap functions
 
 def make_heap_sparse(n_points, size):
