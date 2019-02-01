@@ -11,7 +11,8 @@ from scipy.sparse.csgraph import minimum_spanning_tree
 
 import pynndescent.distances as dist
 
-from pynndescent.utils import (rejection_sample2,
+from pynndescent.utils import (rejection_sample,
+                               seed,
                                tau_rand,
                                make_heap,
                                heap_push,
@@ -131,12 +132,11 @@ def make_nn_descent(dist, dist_args):
                    n_iters=10, delta=0.001, rho=0.5,
                    rp_tree_init=True, leaf_array=None, verbose=False):
         n_vertices = data.shape[0]
-        r = np.random.RandomState()
 
         current_graph = make_heap(data.shape[0], n_neighbors)
         for i in range(data.shape[0]):
-            r.seed(i)
-            indices = rejection_sample2(n_neighbors, data.shape[0], r)
+            seed(rng_state, i)
+            indices = rejection_sample(n_neighbors, data.shape[0], rng_state)
             for j in range(indices.shape[0]):
                 d = dist(data[i], data[indices[j]], *dist_args)
                 heap_push(current_graph, i, d, indices[j], 1)

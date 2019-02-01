@@ -5,6 +5,11 @@
 import numba
 import numpy as np
 
+@numba.njit('void(i8[:], i8)')
+def seed(rng_state, seed):
+    """Seed the random number generator with a given seed."""
+    rng_state.fill(seed + 0xffff)
+
 
 @numba.njit('i4(i8[:])')
 def tau_rand_int(state):
@@ -99,40 +104,6 @@ def rejection_sample(n_samples, pool_size, rng_state):
         result[i] = j
     return result
 
-
-def rejection_sample2(n_samples, pool_size, random_state):
-    """Generate n_samples many integers from 0 to pool_size such that no
-    integer is selected twice. The duplication constraint is achieved via
-    rejection sampling.
-
-    Parameters
-    ----------
-    n_samples: int
-        The number of random samples to select from the pool
-
-    pool_size: int
-        The size of the total pool of candidates to sample from
-
-    rng_state: array of int64, shape (3,)
-        Internal state of the random number generator
-
-    Returns
-    -------
-    sample: array of shape(n_samples,)
-        The ``n_samples`` randomly selected elements from the pool.
-    """
-    result = np.empty(n_samples, dtype=np.int64)
-    for i in range(n_samples):
-        reject_sample = True
-        while reject_sample:
-            j = random_state.randint(0, pool_size)
-            for k in range(i):
-                if j == result[k]:
-                    break
-            else:
-                reject_sample = False
-        result[i] = j
-    return result
 
 @numba.njit('f8[:, :, :](i8,i8)')
 def make_heap(n_points, size):
@@ -348,7 +319,7 @@ def siftdown(heap1, heap2, elt):
             elt = swap
 
 
-#@numba.njit()
+@numba.njit()
 def deheap_sort(heap):
     """Given an array of heaps (of indices and weights), unpack the heap
     out to give and array of sorted lists of indices and weights by increasing
@@ -442,15 +413,14 @@ def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates,
     for i in range(n_vertices): # don't use numba prange during consistency test
         # use a random state, with seed set to the row number so we can check
         # against the distributed algorithm
-        r = np.random.RandomState()
-        r.seed(i)
+        seed(rng_state, i)
         for j in range(n_neighbors):
             if current_graph[0, i, j] < 0:
                 continue
             idx = current_graph[0, i, j]
             isn = current_graph[2, i, j]
-            d = r.random_sample()
-            if r.random_sample() < rho:
+            d = tau_rand(rng_state)
+            if tau_rand(rng_state) < rho:
                 c = 0
                 if isn:
                     c += heap_push(new_candidate_neighbors, i, d, idx, isn)

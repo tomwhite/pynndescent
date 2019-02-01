@@ -6,7 +6,7 @@ from sklearn.utils import check_random_state
 
 from pynndescent import distances
 from pynndescent.heap import *
-from pynndescent.utils import deheap_sort, rejection_sample2
+from pynndescent.utils import deheap_sort, rejection_sample, seed, tau_rand
 
 INT32_MIN = np.iinfo(np.int32).min + 1
 INT32_MAX = np.iinfo(np.int32).max - 1
@@ -46,16 +46,15 @@ def to_local_rows(sc, arr, chunks):
 
 def init_current_graph(data, n_neighbors):
     # This is just a copy from make_nn_descent -> nn_descent
-    r = np.random.RandomState()
-
+    rng_state = np.empty((3,), dtype=np.int64)
     dist = distances.named_distances['euclidean']
 
     current_graph = make_heap(data.shape[0], n_neighbors)
     # for each row i
     for i in range(data.shape[0]):
         # choose K rows from the whole matrix
-        r.seed(i)
-        indices = rejection_sample2(n_neighbors, data.shape[0], r)
+        seed(rng_state, i)
+        indices = rejection_sample(n_neighbors, data.shape[0], rng_state)
         # and work out the dist from row i to each of the random K rows
         for j in range(indices.shape[0]):
             d = dist(data[i], data[indices[j]])
@@ -72,7 +71,7 @@ def init_current_graph_rdd(sc, data_broadcast, data_shape, n_neighbors):
     current_graph_chunks = (3, chunk_size, n_neighbors) # 3 is first heap dimension
 
     def init_current_graph_for_each_part(index, iterator):
-        r = np.random.RandomState()
+        rng_state = np.empty((3,), dtype=np.int64)
         data_local = data_broadcast.value
         offset = index * chunk_size
         for current_graph_part in iterator:
@@ -82,8 +81,8 @@ def init_current_graph_rdd(sc, data_broadcast, data_shape, n_neighbors):
             current_graph_local = make_heap(n_vertices, n_neighbors)
             for i in range(n_vertices_part):
                 iabs = i + offset
-                r.seed(iabs)
-                indices = rejection_sample2(n_neighbors, n_vertices, r)
+                seed(rng_state, iabs)
+                indices = rejection_sample(n_neighbors, n_vertices, rng_state)
                 for j in range(indices.shape[0]):
                     d = dist(data_local[iabs], data_local[indices[j]])
                     heap_push(current_graph_local, iabs, d, indices[j], 1)
@@ -105,7 +104,6 @@ def build_candidates_rdd(current_graph_rdd, n_vertices, n_neighbors, max_candida
     candidate_chunks = (3, chunk_size, max_candidates) # 3 is first heap dimension
 
     def build_candidates_for_each_part(index, iterator):
-        r = np.random.RandomState()
         offset = index * chunk_size
         for current_graph_part in iterator:
             n_vertices_part = current_graph_part.shape[1]
@@ -115,14 +113,14 @@ def build_candidates_rdd(current_graph_rdd, n_vertices, n_neighbors, max_candida
             old_candidate_neighbors = make_heap(n_vertices, max_candidates)
             for i in range(n_vertices_part):
                 iabs = i + offset
-                r.seed(iabs)
+                seed(rng_state, iabs)
                 for j in range(n_neighbors):
                     if current_graph_part[0, i, j] < 0:
                         continue
                     idx = current_graph_part[0, i, j]
                     isn = current_graph_part[2, i, j]
-                    d = r.random_sample()
-                    if r.random_sample() < rho:
+                    d = tau_rand(rng_state)
+                    if tau_rand(rng_state) < rho:
                         c = 0
                         if isn:
                             c += heap_push(new_candidate_neighbors, iabs, d, idx, isn)
