@@ -2,14 +2,10 @@ from functools import partial
 import math
 import numpy as np
 
-from sklearn.utils import check_random_state
-
 from pynndescent import distances
 from pynndescent.heap import *
-from pynndescent.utils import deheap_sort, rejection_sample, seed, tau_rand
-
-INT32_MIN = np.iinfo(np.int32).min + 1
-INT32_MAX = np.iinfo(np.int32).max - 1
+from pynndescent.threaded import chunk_rows, sort_heap_updates, chunk_heap_updates, current_graph_map_jit, apply_heap_updates_jit, apply_new_and_old_heap_updates_jit, candidates_map_jit, nn_descent_map_jit
+from pynndescent.utils import deheap_sort, rejection_sample, seed
 
 # Chunking functions
 # Could use Zarr/Zappy/Anndata for these
@@ -63,102 +59,94 @@ def init_current_graph(data, n_neighbors):
 
     return current_graph
 
-def init_current_graph_rdd(sc, data_broadcast, data_shape, n_neighbors):
-    dist = distances.named_distances['euclidean']
+def init_current_graph_rdd(sc, data_broadcast, data_shape, n_neighbors, chunk_size):
     n_vertices = data_shape[0]
-    chunk_size = 4
     current_graph_rdd = make_heap_rdd(sc, n_vertices, n_neighbors, chunk_size)
-    current_graph_chunks = (3, chunk_size, n_neighbors) # 3 is first heap dimension
 
-    def init_current_graph_for_each_part(index, iterator):
-        rng_state = np.empty((3,), dtype=np.int64)
+    def create_heap_updates(index, iterator):
         data_local = data_broadcast.value
-        offset = index * chunk_size
-        for current_graph_part in iterator:
-            n_vertices_part = current_graph_part.shape[1]
-            # Each part has its own heap for the current graph, which
+        for _ in iterator:
+            # Each part has its own heap updates for the current graph, which
             # are combined in the reduce stage.
-            current_graph_local = make_heap(n_vertices, n_neighbors)
-            for i in range(n_vertices_part):
-                iabs = i + offset
-                seed(rng_state, iabs)
-                indices = rejection_sample(n_neighbors, n_vertices, rng_state)
-                for j in range(indices.shape[0]):
-                    d = dist(data_local[iabs], data_local[indices[j]])
-                    heap_push(current_graph_local, iabs, d, indices[j], 1)
-                    heap_push(current_graph_local, indices[j], d, iabs, 1)
+            max_heap_update_count = chunk_size * n_neighbors * 2
+            heap_updates_local = np.zeros((max_heap_update_count, 4))
+            rows = chunk_rows(chunk_size, index, n_vertices)
+            count = current_graph_map_jit(rows, n_vertices, n_neighbors, data_local, heap_updates_local)
+            heap_updates_local = sort_heap_updates(heap_updates_local, count)
+            offsets = chunk_heap_updates(heap_updates_local, n_vertices, chunk_size)
+            # Split updates into chunks and return each chunk keyed by its index.
+            for i in range(len(offsets) - 1):
+                yield i, heap_updates_local[offsets[i]:offsets[i+1]]
 
-            # Split current_graph into chunks and return each chunk keyed by its index.
-            read_chunk_func_new, chunk_indices = read_chunks(current_graph_local, current_graph_chunks)
-            for i, chunk_index in enumerate(chunk_indices):
-                yield i, read_chunk_func_new(chunk_index)
+    def update_heap(index, iterator):
+        for i in iterator:
+            heap, updates = i
+            for u in updates:
+                offset = index * chunk_size
+                apply_heap_updates_jit(heap, u, offset)
+            yield heap
+
+    # do a group by (rather than some aggregation function), since we don't combine/aggregate on the map side
+    # use a partition function that ensures that partition index i goes to partition i, so we can zip with the original heap
+    updates_rdd = current_graph_rdd \
+        .mapPartitionsWithIndex(create_heap_updates) \
+        .groupByKey(partitionFunc=lambda i: i) \
+        .values()
+
+    # merge the updates into the current graph
+    return current_graph_rdd \
+        .zip(updates_rdd) \
+        .mapPartitionsWithIndex(update_heap)
+
+def build_candidates_rdd(current_graph_rdd, n_vertices, n_neighbors, max_candidates, chunk_size,
+                     rng_state, rho=0.5):
+
+    def create_heap_updates(index, iterator):
+        for current_graph_part in iterator:
+            # Each part has its own heap updates for the current graph, which
+            # are combined in the reduce stage.
+            max_heap_update_count = chunk_size * n_neighbors * 2
+            heap_updates_local = np.zeros((max_heap_update_count, 5))
+            rows = chunk_rows(chunk_size, index, n_vertices)
+            offset = chunk_size * index
+            count = candidates_map_jit(rows, n_neighbors, current_graph_part, heap_updates_local, offset)
+            heap_updates_local = sort_heap_updates(heap_updates_local, count)
+            offsets = chunk_heap_updates(heap_updates_local, n_vertices, chunk_size)
+            # Split updates into chunks and return each chunk keyed by its index.
+            for i in range(len(offsets) - 1):
+                yield i, heap_updates_local[offsets[i]:offsets[i+1]]
+
+    def update_heaps(index, iterator):
+        for i in iterator:
+            current_graph_part, updates = i
+            part_size = chunk_size
+            if n_vertices % chunk_size != 0  and index == n_vertices // chunk_size:
+                part_size = n_vertices % chunk_size
+            new_candidate_neighbors_part = make_heap(part_size, max_candidates)
+            old_candidate_neighbors_part = make_heap(part_size, max_candidates)
+            for u in updates:
+                offset = index * chunk_size
+                apply_new_and_old_heap_updates_jit(current_graph_part, new_candidate_neighbors_part, old_candidate_neighbors_part, u, offset)
+            yield new_candidate_neighbors_part, old_candidate_neighbors_part
+
+    updates_rdd = current_graph_rdd \
+        .mapPartitionsWithIndex(create_heap_updates) \
+        .groupByKey(partitionFunc=lambda i: i) \
+        .values()
 
     return current_graph_rdd \
-        .mapPartitionsWithIndex(init_current_graph_for_each_part) \
-        .reduceByKey(merge_heaps) \
-        .values()
+        .zip(updates_rdd) \
+        .mapPartitionsWithIndex(update_heaps)
 
-def build_candidates_rdd(current_graph_rdd, n_vertices, n_neighbors, max_candidates,
-                     rng_state, rho=0.5):
-    chunk_size = 4
-    candidate_chunks = (3, chunk_size, max_candidates) # 3 is first heap dimension
-
-    def build_candidates_for_each_part(index, iterator):
-        offset = index * chunk_size
-        for current_graph_part in iterator:
-            n_vertices_part = current_graph_part.shape[1]
-            # Each part has its own heaps for old and new candidates, which
-            # are combined in the reduce stage.
-            new_candidate_neighbors = make_heap(n_vertices, max_candidates)
-            old_candidate_neighbors = make_heap(n_vertices, max_candidates)
-            for i in range(n_vertices_part):
-                iabs = i + offset
-                seed(rng_state, iabs)
-                for j in range(n_neighbors):
-                    if current_graph_part[0, i, j] < 0:
-                        continue
-                    idx = current_graph_part[0, i, j]
-                    isn = current_graph_part[2, i, j]
-                    d = tau_rand(rng_state)
-                    if tau_rand(rng_state) < rho:
-                        c = 0
-                        if isn:
-                            c += heap_push(new_candidate_neighbors, iabs, d, idx, isn)
-                            c += heap_push(new_candidate_neighbors, idx, d, iabs, isn)
-                        else:
-                            heap_push(old_candidate_neighbors, iabs, d, idx, isn)
-                            heap_push(old_candidate_neighbors, idx, d, iabs, isn)
-
-                        if c > 0 :
-                            current_graph_part[2, i, j] = 0
-
-            # Split candidate_neighbors into chunks and return each chunk keyed by its index.
-            # New and old are the same size, so chunk indices are the same.
-            read_chunk_func_new, chunk_indices = read_chunks(new_candidate_neighbors, candidate_chunks)
-            read_chunk_func_old, chunk_indices = read_chunks(old_candidate_neighbors, candidate_chunks)
-            for i, chunk_index in enumerate(chunk_indices):
-                yield i, (read_chunk_func_new(chunk_index), read_chunk_func_old(chunk_index))
-
-    candidate_neighbors_combined = current_graph_rdd\
-        .mapPartitionsWithIndex(build_candidates_for_each_part)\
-        .reduceByKey(merge_heap_pairs)\
-        .values()
-
-    return candidate_neighbors_combined
-
-def nn_descent(sc, data, n_neighbors, rng_state, max_candidates=50,
+def nn_descent(sc, data, n_neighbors, rng_state, chunk_size, max_candidates=50,
                n_iters=10, delta=0.001, rho=0.5,
                rp_tree_init=False, leaf_array=None, verbose=False):
-
-    dist = distances.named_distances['euclidean']
 
     data_broadcast = sc.broadcast(data)
 
     n_vertices = data.shape[0]
-    chunk_size = 4
-    current_graph_chunks = (3, chunk_size, n_neighbors) # 3 is first heap dimension
 
-    current_graph_rdd = init_current_graph_rdd(sc, data_broadcast, data.shape, n_neighbors)
+    current_graph_rdd = init_current_graph_rdd(sc, data_broadcast, data.shape, n_neighbors, chunk_size)
 
     for n in range(n_iters):
 
@@ -166,55 +154,43 @@ def nn_descent(sc, data, n_neighbors, rng_state, max_candidates=50,
                                                      n_vertices,
                                                      n_neighbors,
                                                      max_candidates,
+                                                     chunk_size,
                                                      rng_state, rho)
 
 
-        def nn_descent_for_each_part(index, iterator):
+        def create_heap_updates(index, iterator):
             data_local = data_broadcast.value
             for candidate_neighbors_combined_part in iterator:
                 new_candidate_neighbors_part, old_candidate_neighbors_part = candidate_neighbors_combined_part
-                n_vertices_part = new_candidate_neighbors_part.shape[1]
-                # Each part has its own heaps for the current graph, which
+                # Each part has its own heap updates for the current graph, which
                 # are combined in the reduce stage.
-                current_graph_local = make_heap(n_vertices, n_neighbors)
-                c = 0 # not used yet (needs combining across all partitions)
-                for i in range(n_vertices_part):
-                    for j in range(max_candidates):
-                        p = int(new_candidate_neighbors_part[0, i, j])
-                        if p < 0:
-                            continue
-                        for k in range(j, max_candidates):
-                            q = int(new_candidate_neighbors_part[0, i, k])
-                            if q < 0:
-                                continue
+                max_heap_update_count = chunk_size * max_candidates * max_candidates * 4
+                heap_updates_local = np.zeros((max_heap_update_count, 4))
+                rows = chunk_rows(chunk_size, index, n_vertices)
+                offset = chunk_size * index
+                count = nn_descent_map_jit(rows, max_candidates, data_local, new_candidate_neighbors_part, old_candidate_neighbors_part, heap_updates_local, offset)
+                heap_updates_local = sort_heap_updates(heap_updates_local, count)
+                offsets = chunk_heap_updates(heap_updates_local, n_vertices, chunk_size)
+                # Split updates into chunks and return each chunk keyed by its index.
+                for i in range(len(offsets) - 1):
+                    yield i, heap_updates_local[offsets[i]:offsets[i+1]]
 
-                            d = dist(data_local[p], data_local[q])
-                            c += heap_push(current_graph_local, p, d, q, 1)
-                            c += heap_push(current_graph_local, q, d, p, 1)
+        def update_heap(index, iterator):
+            for i in iterator:
+                heap, updates = i
+                for u in updates:
+                    offset = index * chunk_size
+                    apply_heap_updates_jit(heap, u, offset)
+                yield heap
 
-                        for k in range(max_candidates):
-                            q = int(old_candidate_neighbors_part[0, i, k])
-                            if q < 0:
-                                continue
-
-                            d = dist(data_local[p], data_local[q])
-                            c += heap_push(current_graph_local, p, d, q, 1)
-                            c += heap_push(current_graph_local, q, d, p, 1)
-
-                # Split current_graph into chunks and return each chunk keyed by its index.
-                read_chunk_func, chunk_indices = read_chunks(current_graph_local, current_graph_chunks)
-                for i, chunk_index in enumerate(chunk_indices):
-                    yield i, read_chunk_func(chunk_index)
-
-        current_graph_rdd_updates = candidate_neighbors_combined\
-            .mapPartitionsWithIndex(nn_descent_for_each_part)\
-            .reduceByKey(merge_heaps)\
+        updates_rdd = candidate_neighbors_combined \
+            .mapPartitionsWithIndex(create_heap_updates) \
+            .groupByKey(partitionFunc=lambda i: i) \
             .values()
 
-        # merge the updates into the current graph
-        current_graph_rdd = current_graph_rdd\
-            .zip(current_graph_rdd_updates)\
-            .map(lambda pair: merge_heaps(pair[0], pair[1]))
+        current_graph_rdd = current_graph_rdd \
+            .zip(updates_rdd) \
+            .mapPartitionsWithIndex(update_heap)
 
         # TODO: transfer c back from each partition and sum, in order to implement termination criterion
         # if c <= delta * n_neighbors * data.shape[0]:

@@ -60,6 +60,17 @@ def apply_heap_updates_jit(heap, heap_updates, offset):
         c += heap_push(heap, int(heap_update[0]) - offset, heap_update[1], int(heap_update[2]), int(heap_update[3]))
     return c
 
+@numba.njit('void(f8[:, :, :], f8[:, :, :], f8[:, :, :], f8[:, :], i8)', nogil=True)
+def apply_new_and_old_heap_updates_jit(current_graph_part, new_candidate_neighbors, old_candidate_neighbors, heap_updates, offset):
+    for i in range(len(heap_updates)):
+        heap_update = heap_updates[i]
+        if heap_update[3]:
+            c = heap_push(new_candidate_neighbors, int(heap_update[0]) - offset, heap_update[1], int(heap_update[2]), int(heap_update[3]))
+            if c > 0:
+                current_graph_part[2, int(heap_update[0]) - offset, int(heap_update[4])] = 0
+        else:
+            heap_push(old_candidate_neighbors, int(heap_update[0]) - offset, heap_update[1], int(heap_update[2]), int(heap_update[3]))
+
 # Map Reduce functions to be jitted
 
 dist = distances.named_distances['euclidean']
@@ -129,17 +140,17 @@ def init_current_graph_threaded(data, n_neighbors, chunk_size, threads=2):
 
 rho = 0.5 # TODO: pass
 
-@numba.njit('i8(i8[:], i8, f8[:, :, :], f8[:, :])', nogil=True)
-def candidates_map_jit(rows, n_neighbors, current_graph, heap_updates):
+@numba.njit('i8(i8[:], i8, f8[:, :, :], f8[:, :], i8)', nogil=True)
+def candidates_map_jit(rows, n_neighbors, current_graph, heap_updates, offset):
     rng_state = np.empty((3,), dtype=np.int64)
     count = 0
     for i in rows:
         seed(rng_state, i)
         for j in range(n_neighbors):
-            if current_graph[0, i, j] < 0:
+            if current_graph[0, i - offset, j] < 0:
                 continue
-            idx = current_graph[0, i, j]
-            isn = current_graph[2, i, j]
+            idx = current_graph[0, i - offset, j]
+            isn = current_graph[2, i - offset, j]
             d = tau_rand(rng_state)
             if tau_rand(rng_state) < rho:
                 # updates are common to old and new - decided by 'isn' flag
@@ -177,7 +188,7 @@ def build_candidates_threaded(current_graph, n_vertices, n_neighbors, max_candid
 
     def candidates_map(index):
         rows = chunk_rows(chunk_size, index, n_vertices)
-        return index, candidates_map_jit(rows, n_neighbors, current_graph, heap_updates[index])
+        return index, candidates_map_jit(rows, n_neighbors, current_graph, heap_updates[index], offset=0)
 
     def candidates_reduce(index):
         return candidates_reduce_jit(n_tasks, current_graph, new_candidate_neighbors, old_candidate_neighbors, heap_updates, offsets, index)
@@ -203,10 +214,11 @@ def build_candidates_threaded(current_graph, n_vertices, n_neighbors, max_candid
 
     return new_candidate_neighbors, old_candidate_neighbors
 
-@numba.njit('i8(i8[:], i8, f4[:, :], f8[:, :, :], f8[:, :, :], f8[:, :])', nogil=True)
-def nn_descent_map_jit(rows, max_candidates, data, new_candidate_neighbors, old_candidate_neighbors, heap_updates):
+@numba.njit('i8(i8[:], i8, f4[:, :], f8[:, :, :], f8[:, :, :], f8[:, :], i8)', nogil=True)
+def nn_descent_map_jit(rows, max_candidates, data, new_candidate_neighbors, old_candidate_neighbors, heap_updates, offset):
     count = 0
     for i in rows:
+        i -= offset
         for j in range(max_candidates):
             p = int(new_candidate_neighbors[0, i, j])
             if p < 0:
@@ -273,7 +285,7 @@ def nn_descent(data, n_neighbors, rng_state, chunk_size, max_candidates=50,
 
         def nn_descent_map(index):
             rows = chunk_rows(chunk_size, index, n_vertices)
-            return index, nn_descent_map_jit(rows, max_candidates, data, new_candidate_neighbors, old_candidate_neighbors, heap_updates[index])
+            return index, nn_descent_map_jit(rows, max_candidates, data, new_candidate_neighbors, old_candidate_neighbors, heap_updates[index], offset=0)
 
         def nn_decent_reduce(index):
             return nn_decent_reduce_jit(n_tasks, current_graph, heap_updates, offsets, index)
