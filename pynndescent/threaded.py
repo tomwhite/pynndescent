@@ -49,6 +49,16 @@ def chunk_heap_updates(heap_updates, num_heap_updates, sorter, chunk_size):
     chunk_boundaries = [i * chunk_size for i in range(int(math.ceil(float(num_heap_updates) / chunk_size)) + 1)]
     return np.searchsorted(row_numbers, chunk_boundaries, side='left', sorter=sorter)
 
+@numba.njit('i8[:](f8[:, :], i8, i8)')
+def sort_and_chunk_heap_updates(heap_updates, num_heap_updates, chunk_size):
+    """Take an array of unsorted heap updates and sort in-place (by row number)
+    and return the offsets for each chunk."""
+    row_numbers = heap_updates[:num_heap_updates, 0]
+    heap_updates = heap_updates[:num_heap_updates][row_numbers.argsort()]
+    chunk_boundaries = [i * chunk_size for i in range(int(math.ceil(float(num_heap_updates) / chunk_size)) + 1)]
+    offsets = np.searchsorted(heap_updates[:, 0], chunk_boundaries, side='left')
+    return offsets
+
 # Map Reduce functions to be jitted
 
 dist = distances.named_distances['euclidean']
@@ -68,13 +78,18 @@ def current_graph_map_jit(chunk_size, n_vertices, n_neighbors, data, heap_update
             count += 1
     heap_update_counts[index] = count
 
-@numba.njit('void(i8, f8[:, :, :], f8[:, :, :], i8[:, :], i8[:, :], i8)', nogil=True)
-def current_graph_reduce_jit(n_tasks, current_graph, heap_updates, sorters, offsets, index):
+@numba.njit('void(i8, f8[:, :, :], f8[:, :, :], i8[:, :], i8)', nogil=True)
+def current_graph_reduce_jit(n_tasks, current_graph, heap_updates, offsets, index):
     for update_i in range(n_tasks):
-        s, o = sorters[update_i], offsets[update_i]
+        o = offsets[update_i]
         for j in range(o[index], o[index + 1]):
-            heap_update = heap_updates[update_i, s[j]]
+            heap_update = heap_updates[update_i, j]
             heap_push(current_graph, int(heap_update[0]), heap_update[1], int(heap_update[2]), int(heap_update[3]))
+
+@numba.njit('void(f8[:, :, :], i8[:], i8[:, :], i8, i8)', nogil=True)
+def shuffle_jit(heap_updates, heap_update_counts, offsets, chunk_size, index):
+    o = sort_and_chunk_heap_updates(heap_updates[index], heap_update_counts[index], chunk_size)
+    offsets[index, :o.shape[0]] = o
 
 def init_current_graph_threaded(data, n_neighbors, chunk_size=4, threads=2):
 
@@ -92,7 +107,7 @@ def init_current_graph_threaded(data, n_neighbors, chunk_size=4, threads=2):
         return current_graph_map_jit(chunk_size, n_vertices, n_neighbors, data, heap_updates, heap_update_counts, index)
 
     def current_graph_reduce(index):
-        return current_graph_reduce_jit(n_tasks, current_graph, heap_updates, sorters, offsets, index)
+        return current_graph_reduce_jit(n_tasks, current_graph, heap_updates, offsets, index)
 
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=threads)
     # run map functions
@@ -101,22 +116,10 @@ def init_current_graph_threaded(data, n_neighbors, chunk_size=4, threads=2):
 
     # sort and chunk heap updates so they can be applied in the reduce
     max_count = heap_update_counts.max()
-    sorters = np.zeros((n_tasks, max_count), dtype=int)
     offsets = np.zeros((n_tasks, max_count), dtype=int)
 
-    # Can't JIT due to chunk_heap_updates
-    # @numba.njit('void(f8[:, :, :], i8[:], i8[:, :], i8[:, :], i8)', nogil=True)
-    # def shuffle_jit(heap_updates, heap_update_counts, sorters, offsets, index):
-    #     s = sort_heap_updates(heap_updates[index], heap_update_counts[index])
-    #     o = chunk_heap_updates(heap_updates[index], heap_update_counts[index], s, chunk_size)
-    #     sorters[index, :s.shape[0]] = s
-    #     offsets[index, :o.shape[0]] = o
-
     def shuffle(index):
-        s = sort_heap_updates(heap_updates[index], heap_update_counts[index])
-        o = chunk_heap_updates(heap_updates[index], heap_update_counts[index], s, chunk_size)
-        sorters[index, :s.shape[0]] = s
-        offsets[index, :o.shape[0]] = o
+        return shuffle_jit(heap_updates, heap_update_counts, offsets, chunk_size, index)
 
     for _ in executor.map(shuffle, range(n_tasks)):
         pass
@@ -149,12 +152,12 @@ def candidates_map_jit(chunk_size, n_vertices, n_neighbors, current_graph, heap_
                 count += 1
     heap_update_counts[index] = count
 
-@numba.njit('void(i8, f8[:, :, :], f8[:, :, :], f8[:, :, :], f8[:, :, :], i8[:, :], i8[:, :], i8)', nogil=True)
-def candidates_reduce_jit(n_tasks, current_graph, new_candidate_neighbors, old_candidate_neighbors, heap_updates, sorters, offsets, index):
+@numba.njit('void(i8, f8[:, :, :], f8[:, :, :], f8[:, :, :], f8[:, :, :], i8[:, :], i8)', nogil=True)
+def candidates_reduce_jit(n_tasks, current_graph, new_candidate_neighbors, old_candidate_neighbors, heap_updates, offsets, index):
     for update_i in range(n_tasks):
-        s, o = sorters[update_i], offsets[update_i]
+        o = offsets[update_i]
         for j in range(o[index], o[index + 1]):
-            heap_update = heap_updates[update_i, s[j]]
+            heap_update = heap_updates[update_i, j]
             if heap_update[3]:
                 c = heap_push(new_candidate_neighbors, int(heap_update[0]), heap_update[1], int(heap_update[2]), int(heap_update[3]))
                 if c > 0:
@@ -179,7 +182,7 @@ def build_candidates_threaded(current_graph, n_vertices, n_neighbors, max_candid
         return candidates_map_jit(chunk_size, n_vertices, n_neighbors, current_graph, heap_updates, heap_update_counts, index)
 
     def candidates_reduce(index):
-        return candidates_reduce_jit(n_tasks, current_graph, new_candidate_neighbors, old_candidate_neighbors, heap_updates, sorters, offsets, index)
+        return candidates_reduce_jit(n_tasks, current_graph, new_candidate_neighbors, old_candidate_neighbors, heap_updates, offsets, index)
 
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=threads)
     # run map functions
@@ -188,14 +191,10 @@ def build_candidates_threaded(current_graph, n_vertices, n_neighbors, max_candid
 
     # sort and chunk heap updates so they can be applied in the reduce
     max_count = heap_update_counts.max()
-    sorters = np.zeros((n_tasks, max_count), dtype=int)
     offsets = np.zeros((n_tasks, max_count), dtype=int)
 
     def shuffle(index):
-        s = sort_heap_updates(heap_updates[index], heap_update_counts[index])
-        o = chunk_heap_updates(heap_updates[index], heap_update_counts[index], s, chunk_size)
-        sorters[index, :s.shape[0]] = s
-        offsets[index, :o.shape[0]] = o
+        return shuffle_jit(heap_updates, heap_update_counts, offsets, chunk_size, index)
 
     for _ in executor.map(shuffle, range(n_tasks)):
         pass
@@ -237,13 +236,13 @@ def nn_descent_map_jit(chunk_size, n_vertices, max_candidates, data, new_candida
                 count += 1
     heap_update_counts[index] = count
 
-@numba.njit('i8(i8, f8[:, :, :], f8[:, :, :], i8[:, :], i8[:, :], i8)', nogil=True)
-def nn_decent_reduce_jit(n_tasks, current_graph, heap_updates, sorters, offsets, index):
+@numba.njit('i8(i8, f8[:, :, :], f8[:, :, :], i8[:, :], i8)', nogil=True)
+def nn_decent_reduce_jit(n_tasks, current_graph, heap_updates, offsets, index):
     c = 0
     for update_i in range(n_tasks):
-        s, o = sorters[update_i], offsets[update_i]
+        o = offsets[update_i]
         for j in range(o[index], o[index + 1]):
-            heap_update = heap_updates[update_i, s[j]]
+            heap_update = heap_updates[update_i, j]
             c += heap_push(current_graph, heap_update[0], heap_update[1], heap_update[2], heap_update[3])
     return c
 
@@ -277,7 +276,7 @@ def nn_descent(data, n_neighbors, rng_state, max_candidates=50,
             return nn_descent_map_jit(chunk_size, n_vertices, max_candidates, data, new_candidate_neighbors, old_candidate_neighbors, heap_updates, heap_update_counts, index)
 
         def nn_decent_reduce(index):
-            return nn_decent_reduce_jit(n_tasks, current_graph, heap_updates, sorters, offsets, index)
+            return nn_decent_reduce_jit(n_tasks, current_graph, heap_updates, offsets, index)
 
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=threads)
         # run map functions
@@ -286,14 +285,10 @@ def nn_descent(data, n_neighbors, rng_state, max_candidates=50,
 
         # sort and chunk heap updates so they can be applied in the reduce
         max_count = heap_update_counts.max()
-        sorters = np.zeros((n_tasks, max_count), dtype=int)
         offsets = np.zeros((n_tasks, max_count), dtype=int)
 
         def shuffle(index):
-            s = sort_heap_updates(heap_updates[index], heap_update_counts[index])
-            o = chunk_heap_updates(heap_updates[index], heap_update_counts[index], s, chunk_size)
-            sorters[index, :s.shape[0]] = s
-            offsets[index, :o.shape[0]] = o
+            return shuffle_jit(heap_updates, heap_update_counts, offsets, chunk_size, index)
 
         for _ in executor.map(shuffle, range(n_tasks)):
             pass
