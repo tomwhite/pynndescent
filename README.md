@@ -159,6 +159,24 @@ Summary: DOK is the only sparse implementation that is appropriate for doing
 heap updates. COO and CSR don't support efficient inserts, and LIL is not space
 efficient since it stores an empty list for empty rows.
 
+### Threaded implementation
+
+The threaded implementation takes advantage of Numba's `nogil` feature, where
+concurrency is achieved using Python's standard `concurrent.futures` module.
+
+See [https://numba.pydata.org/numba-doc/dev/user/examples.html#multi-threading](https://numba.pydata.org/numba-doc/dev/user/examples.html#multi-threading)
+
+Each thread runs a Numba-optimized code in parallel. A basic MapReduce
+style computation is run using shared memory, and by ensuring map and reduce
+tasks only update rows within the range they are working on.
+
+The distributed heap update is similar to that described above, except rather
+than store a sparse heap in each map task, an array of updates is kept, and the
+heaps are only updated in the reduce tasks.
+
+The threaded implementation is a stepping stone to a fully-distributed implementation
+in Spark or Dask.
+
 ### Usage
 
 ```
