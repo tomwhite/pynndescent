@@ -145,7 +145,7 @@ def make_nn_descent(dist, dist_args):
     specialised to the given metric.
     """
 
-    #@numba.njit(fastmath=True)
+    @numba.njit(fastmath=True)
     def nn_descent(data, n_neighbors, rng_state, max_candidates=50,
                    n_iters=10, delta=0.001, rho=0.5,
                    rp_tree_init=True, leaf_array=None, verbose=False):
@@ -153,7 +153,7 @@ def make_nn_descent(dist, dist_args):
 
         current_graph = make_heap(data.shape[0], n_neighbors)
         for i in range(data.shape[0]):
-            seed(rng_state, i)
+            #seed(rng_state, i)
             indices = rejection_sample(n_neighbors, data.shape[0], rng_state)
             for j in range(indices.shape[0]):
                 d = dist(data[i], data[indices[j]], *dist_args)

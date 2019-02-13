@@ -378,7 +378,7 @@ def smallest_flagged(heap, row):
 
 
 # don't use numba jit while testing consistency between local and spark versions
-#@numba.njit(parallel=True)
+@numba.njit(parallel=True)
 def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates,
                      rng_state, rho=0.5):
     """Build a heap of candidate neighbors for nearest neighbor descent. For
@@ -410,10 +410,10 @@ def build_candidates(current_graph, n_vertices, n_neighbors, max_candidates,
     new_candidate_neighbors = make_heap(n_vertices, max_candidates)
     old_candidate_neighbors = make_heap(n_vertices, max_candidates)
 
-    for i in range(n_vertices): # don't use numba prange during consistency test
+    for i in numba.prange(n_vertices): # don't use numba prange during consistency test
         # use a random state, with seed set to the row number so we can check
         # against the distributed algorithm
-        seed(rng_state, i)
+        #seed(rng_state, i)
         for j in range(n_neighbors):
             if current_graph[0, i, j] < 0:
                 continue
