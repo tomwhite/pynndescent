@@ -60,57 +60,24 @@ def test_heap_updates():
     ], dtype=np.float64)
     num_heap_updates = 5
     chunk_size = 2
-    sorter = threaded.sort_heap_updates(heap_updates, num_heap_updates)
-    offsets = threaded.chunk_heap_updates(heap_updates, num_heap_updates, sorter, chunk_size)
+    sorted_heap_updates = threaded.sort_heap_updates(heap_updates, num_heap_updates)
+    offsets = threaded.chunk_heap_updates(sorted_heap_updates, 6, chunk_size)
 
     assert_allclose(offsets, np.array([0, 1, 3, 5]))
 
-    chunk0 = heap_updates[sorter[offsets[0]:offsets[1]]]
+    chunk0 = sorted_heap_updates[offsets[0]:offsets[1]]
     assert_allclose(chunk0, np.array([
         [1, 5, 29, 0]
     ]))
 
-    chunk1 = heap_updates[sorter[offsets[1]:offsets[2]]]
+    chunk1 = sorted_heap_updates[offsets[1]:offsets[2]]
     assert_allclose(chunk1, np.array([
         [2, 2, 14, 0],
         [3, 3, 12, 0]
     ]))
 
-    chunk2 = heap_updates[sorter[offsets[2]:offsets[3]]]
+    chunk2 = sorted_heap_updates[offsets[2]:offsets[3]]
     assert_allclose(chunk2, np.array([
         [4, 1, 15, 0],
         [4, 7, 40, 0]
     ]))
-
-def test_sort_and_chunk_heap_updates():
-    heap_updates = np.array([
-        [4, 1, 15, 0],
-        [3, 3, 12, 0],
-        [2, 2, 14, 0],
-        [1, 5, 29, 0],
-        [4, 7, 40, 0],
-        [0, 0, 0, 0],
-    ], dtype=np.float64)
-    num_heap_updates = 5
-    chunk_size = 2
-    offsets = threaded.sort_and_chunk_heap_updates(heap_updates, num_heap_updates, chunk_size, 5)
-
-    assert_allclose(offsets, np.array([0, 1, 3, 5]))
-
-    # TODO: fix
-    # chunk0 = heap_updates[offsets[0]:offsets[1]]
-    # assert_allclose(chunk0, np.array([
-    #     [1, 5, 29, 0]
-    # ]))
-    #
-    # chunk1 = heap_updates[offsets[1]:offsets[2]]
-    # assert_allclose(chunk1, np.array([
-    #     [2, 2, 14, 0],
-    #     [3, 3, 12, 0]
-    # ]))
-    #
-    # chunk2 = heap_updates[offsets[2]:offsets[3]]
-    # assert_allclose(chunk2, np.array([
-    #     [4, 1, 15, 0],
-    #     [4, 7, 40, 0]
-    # ]))

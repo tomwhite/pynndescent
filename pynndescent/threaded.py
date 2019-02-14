@@ -33,35 +33,23 @@ def init_current_graph(data, n_neighbors):
 def chunk_rows(chunk_size, index, n_vertices):
     return np.arange(chunk_size * index, min(chunk_size * (index + 1), n_vertices))
 
-@numba.njit('i8[:](f8[:, :], i8)')
+@numba.njit('f8[:, :](f8[:, :], i8)')
 def sort_heap_updates(heap_updates, num_heap_updates):
-    """Take an array of unsorted heap updates and return sorted indices
-    (from argsort)."""
+    """Take an array of unsorted heap updates and sort by row number."""
     row_numbers = heap_updates[:num_heap_updates, 0]
-    return row_numbers.argsort()
+    return heap_updates[:num_heap_updates][row_numbers.argsort()]
 
-# Numba JIT doesn't work since `searchsorted` with the `sorter` arg is not supported.
-# See https://numba.pydata.org/numba-doc/dev/reference/numpysupported.html#other-functions
-#@numba.njit('i8[:](f8[:, :], i8, i8[:], i8)')
-def chunk_heap_updates(heap_updates, num_heap_updates, sorter, chunk_size):
-    """Take an array of unsorted heap updates and return offsets for each chunk."""
-    row_numbers = heap_updates[:num_heap_updates, 0]
-    chunk_boundaries = [i * chunk_size for i in range(int(math.ceil(float(num_heap_updates) / chunk_size)) + 1)]
-    return np.searchsorted(row_numbers, chunk_boundaries, side='left', sorter=sorter)
-
-@numba.njit('i8[:](f8[:, :], i8, i8, i8)')
-def sort_and_chunk_heap_updates(heap_updates, num_heap_updates, chunk_size, n_vertices):
-    """Take an array of unsorted heap updates and sort in-place (by row number)
-    and return the offsets for each chunk."""
-    row_numbers = heap_updates[:num_heap_updates, 0]
-    heap_updates = heap_updates[:num_heap_updates][row_numbers.argsort()]
+@numba.njit('i8[:](f8[:, :], i8, i8)')
+def chunk_heap_updates(heap_updates, n_vertices, chunk_size):
+    """Return the offsets for each chunk of sorted heap updates."""
     chunk_boundaries = [i * chunk_size for i in range(int(math.ceil(float(n_vertices) / chunk_size)) + 1)]
     offsets = np.searchsorted(heap_updates[:, 0], chunk_boundaries, side='left')
     return offsets
 
 @numba.njit('void(f8[:, :, :], i8[:], i8[:, :], i8, i8, i8)', nogil=True)
 def shuffle_jit(heap_updates, heap_update_counts, offsets, chunk_size, n_vertices, index):
-    o = sort_and_chunk_heap_updates(heap_updates[index], heap_update_counts[index], chunk_size, n_vertices)
+    sorted_heap_updates = sort_heap_updates(heap_updates[index], heap_update_counts[index])
+    o = chunk_heap_updates(sorted_heap_updates, n_vertices, chunk_size)
     offsets[index, :o.shape[0]] = o
 
 # Map Reduce functions to be jitted
