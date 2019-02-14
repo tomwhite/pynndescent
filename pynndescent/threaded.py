@@ -52,6 +52,12 @@ def shuffle_jit(heap_updates, heap_update_counts, offsets, chunk_size, n_vertice
     o = chunk_heap_updates(sorted_heap_updates, n_vertices, chunk_size)
     offsets[index, :o.shape[0]] = o
 
+@numba.njit('void(f8[:, :, :], f8[:, :], i8)', nogil=True)
+def apply_heap_updates_jit(heap, heap_updates, offset):
+    for i in range(len(heap_updates)):
+        heap_update = heap_updates[i]
+        heap_push(heap, int(heap_update[0]) - offset, heap_update[1], int(heap_update[2]), int(heap_update[3]))
+
 # Map Reduce functions to be jitted
 
 dist = distances.named_distances['euclidean']
