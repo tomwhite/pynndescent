@@ -16,7 +16,7 @@ def test_init_current_graph():
     n_neighbors = 2
 
     current_graph = threaded.init_current_graph(data, n_neighbors)
-    current_graph_threaded = threaded.init_current_graph_threaded(data, n_neighbors)
+    current_graph_threaded = threaded.init_current_graph_threaded(data, n_neighbors, chunk_size=4)
 
     assert_allclose(current_graph_threaded, current_graph)
 
@@ -32,7 +32,7 @@ def test_build_candidates():
 
     current_graph = threaded.init_current_graph(data, n_neighbors)
     new_candidate_neighbors_threaded, old_candidate_neighbors_threaded = \
-        threaded.build_candidates_threaded(current_graph, n_vertices, n_neighbors, max_candidates, rng_state=new_rng_state())
+        threaded.build_candidates_threaded(current_graph, n_vertices, n_neighbors, max_candidates, chunk_size=4, rng_state=new_rng_state())
 
     assert_allclose(new_candidate_neighbors_threaded, new_candidate_neighbors)
     assert_allclose(old_candidate_neighbors_threaded, old_candidate_neighbors)
@@ -45,7 +45,7 @@ def test_nn_descent():
     nn_descent = pynndescent_.make_nn_descent(distances.named_distances['euclidean'], ())
     nn = nn_descent(data, n_neighbors=n_neighbors, rng_state=new_rng_state(), max_candidates=max_candidates, n_iters=1, delta=0, rp_tree_init=False)
 
-    nn_threaded = threaded.nn_descent(data, n_neighbors=n_neighbors, rng_state=new_rng_state(), max_candidates=max_candidates, n_iters=1, delta=0, rp_tree_init=False)
+    nn_threaded = threaded.nn_descent(data, n_neighbors=n_neighbors, rng_state=new_rng_state(), chunk_size=4, max_candidates=max_candidates, n_iters=1, delta=0, rp_tree_init=False)
 
     assert_allclose(nn, nn_threaded)
 

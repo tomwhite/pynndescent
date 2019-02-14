@@ -85,7 +85,7 @@ def current_graph_reduce_jit(n_tasks, current_graph, heap_updates, offsets, inde
             heap_update = heap_updates[update_i, j]
             heap_push(current_graph, int(heap_update[0]), heap_update[1], int(heap_update[2]), int(heap_update[3]))
 
-def init_current_graph_threaded(data, n_neighbors, chunk_size=4, threads=2):
+def init_current_graph_threaded(data, n_neighbors, chunk_size, threads=2):
 
     n_vertices = data.shape[0]
     n_tasks = int(math.ceil(float(n_vertices) / chunk_size))
@@ -160,8 +160,8 @@ def candidates_reduce_jit(n_tasks, current_graph, new_candidate_neighbors, old_c
             else:
                 heap_push(old_candidate_neighbors, int(heap_update[0]), heap_update[1], int(heap_update[2]), int(heap_update[3]))
 
-def build_candidates_threaded(current_graph, n_vertices, n_neighbors, max_candidates,
-                         rng_state, rho=0.5, chunk_size=4, threads=2):
+def build_candidates_threaded(current_graph, n_vertices, n_neighbors, max_candidates, chunk_size,
+                         rng_state, rho=0.5, threads=2):
 
     n_tasks = int(math.ceil(float(n_vertices) / chunk_size))
 
@@ -242,9 +242,9 @@ def nn_decent_reduce_jit(n_tasks, current_graph, heap_updates, offsets, index):
             c += heap_push(current_graph, heap_update[0], heap_update[1], heap_update[2], heap_update[3])
     return c
 
-def nn_descent(data, n_neighbors, rng_state, max_candidates=50,
+def nn_descent(data, n_neighbors, rng_state, chunk_size, max_candidates=50,
                n_iters=10, delta=0.001, rho=0.5,
-               rp_tree_init=False, leaf_array=None, verbose=False, chunk_size=4, threads=2):
+               rp_tree_init=False, leaf_array=None, verbose=False, threads=2):
 
     dist = distances.named_distances['euclidean']
 
@@ -260,8 +260,9 @@ def nn_descent(data, n_neighbors, rng_state, max_candidates=50,
                                                      n_vertices,
                                                      n_neighbors,
                                                      max_candidates,
+                                                     chunk_size,
                                                      rng_state, rho,
-                                                     chunk_size, threads)
+                                                     threads)
 
         # store the updates in an array
         max_heap_update_count = chunk_size * max_candidates * max_candidates * 4
