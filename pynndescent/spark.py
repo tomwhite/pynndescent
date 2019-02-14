@@ -1,41 +1,27 @@
-from functools import partial
-import math
+import itertools
 import numpy as np
 
-from pynndescent.heap import make_heap_rdd
 from pynndescent.threaded import chunk_rows, sort_heap_updates, chunk_heap_updates, current_graph_map_jit, apply_heap_updates_jit, apply_new_and_old_heap_updates_jit, candidates_map_jit, nn_descent_map_jit
 from pynndescent.utils import deheap_sort, make_heap
 
 # Chunking functions
-# Could use Zarr/Zappy/Anndata for these
 
-def read_zarr_chunk(arr, chunks, chunk_index):
-    return arr[
-           chunks[0] * chunk_index[0] : chunks[0] * (chunk_index[0] + 1),
-           chunks[1] * chunk_index[1] : chunks[1] * (chunk_index[1] + 1),
-           chunks[2] * chunk_index[2] : chunks[2] * (chunk_index[2] + 1),
-           ]
+def get_chunk_sizes(shape, chunks):
+    def sizes(length, chunk_length):
+        res = [chunk_length] * (length // chunk_length)
+        if length % chunk_length != 0:
+            res.append(length % chunk_length)
+        return res
 
-def get_chunk_indices(shape, chunks):
-    """
-    Return all the indices (coordinates) for the chunks in a zarr array, even empty ones.
-    """
-    return [
-        (i, j, k)
-        for i in range(int(math.ceil(float(shape[0]) / chunks[0])))
-        for j in range(int(math.ceil(float(shape[1]) / chunks[1])))
-        for k in range(int(math.ceil(float(shape[2]) / chunks[2])))
-    ]
+    return itertools.product(sizes(shape[0], chunks[0]), sizes(shape[1], chunks[1]), sizes(shape[2], chunks[2]))
 
-def read_chunks(arr, chunks):
-    shape = arr.shape
-    func = partial(read_zarr_chunk, arr, chunks)
-    chunk_indices = get_chunk_indices(shape, chunks)
-    return func, chunk_indices
-
-def to_local_rows(sc, arr, chunks):
-    func, chunk_indices = read_chunks(arr, chunks)
-    return [func(i) for i in chunk_indices]
+def make_heap_rdd(sc, n_points, size, chunk_size):
+    shape = (3, n_points, size)
+    chunks = (shape[0], chunk_size, shape[2])
+    chunk_sizes = list(get_chunk_sizes(shape, chunks))
+    def make_heap_chunk(chunk_size):
+        return make_heap(chunk_size[1], chunk_size[2])
+    return sc.parallelize(chunk_sizes, len(chunk_sizes)).map(make_heap_chunk)
 
 # NNDescent algorithm
 
