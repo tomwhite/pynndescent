@@ -3,7 +3,7 @@ import math
 import numpy as np
 
 from pynndescent import distances
-from pynndescent.heap import *
+from pynndescent.heap import make_heap, make_heap_rdd, heap_push
 from pynndescent.threaded import chunk_rows, sort_heap_updates, chunk_heap_updates, current_graph_map_jit, apply_heap_updates_jit, apply_new_and_old_heap_updates_jit, candidates_map_jit, nn_descent_map_jit
 from pynndescent.utils import deheap_sort, rejection_sample, seed
 

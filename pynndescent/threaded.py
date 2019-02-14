@@ -1,11 +1,9 @@
 import concurrent.futures
-from functools import partial
 import math
 import numba
 import numpy as np
 
 from pynndescent import distances
-#from pynndescent.heap import *
 from pynndescent.utils import deheap_sort, heap_push, make_heap, rejection_sample, seed, tau_rand
 
 # NNDescent algorithm
