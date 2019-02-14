@@ -41,20 +41,31 @@ A distributed heap is an array with the structure described in the previous sect
 and which has been split into equal sized chunks, or partitions.
 
 A distributed heap can be updated in a MapReduce operation as follows. Each partition holds
-a temporary copy of a sparse heap, initially empty. The Map phase adds entries
-to the heap, which may occur at _any_ row index. The heap is limited in size since it
-is sparse.
+an array of heap updates, corresponding to a row in the following diagram.
 
-After all the updates have been applied to the temporary sparse heap for a given
-partition, the heap must be chunked (using the same chunking as the original
-distributed heap) into a series of sparse heap chunks. This results in a set of
-`(index, sparse heap chunk)` pairs, where the index is the index of the sparse
-heap chunk in the array. These pairs are emitted by the Map.
+![Heap updates](heap_updates.png)
 
-These pairs are shuffled by the key (the index), and the Reduce combines all the
-sparse heap chunks for a given index, including the chunk for that index
-from the original heap, to produce a final (dense) heap chunk for each partition.
-The combine stage is simply a heap merge. The result is an updated distributed heap.
+The Map phase adds updates in the order they were generated.
+Updates may be for _any_ row index - so they can cross partitions, which means the
+updates will need to be sent to the right partition (which is why we need to sort them).
+
+After all the updates have been added for a partition, they are sorted by row number,
+then the chunk boundaries corresponding to partitions are found. Each chunk is
+emitted  by the Map as a `(index, heap updates chunk)` pair, where the index
+is the index of the partition that these updates belong in.
+
+These pairs are shuffled by the key (the index), and the Reduce applies all
+of the heap updates for that partition to the original heap.
+
+The result is an updated distributed heap.
+
+__Note__: an in-core implementation of this scheme is possible too, using a large single
+array held in memory and thread pool to update chunks in parallel.
+For the Map phase the array is processed row-wise,
+and in the Reduce phase it is processed column-wise (although the column bounds are
+different for each row owing to the different chunk boundaries).
+See the discussion below.
+
 
 ### The NNDescent algorithm
 
@@ -123,41 +134,8 @@ For this reason the data is distributed to all workers so they can compute dista
 Note that PCA is typically run on the data first (to avoid the curse of dimensionality),
 so a 1 million row dataset with 50 dimensions would take around 400MB of storage.
 This size is very feasible to distribute (e.g. via Spark broadcast), but for much
-larger datasets alternative arrangements may be needed (e.g. load from Zarr storage
+larger datasets alternative approaches may be needed (e.g. load from Zarr storage
 in the cloud).
-
-### Sparse arrays
-
-Sparse arrays are used for heap updates in MapReduce. The following table
-lists the desired properties of sparse arrays for this purpose.
-
-| Property         | Dictionary Of Keys | COOrdinate         | LInked List        | Compressed Sparse Row | pydata.sparse.DOK  |
-| ---------------- | ------------------ | ------------------ | ------------------ | --------------------- | ------------------ |
-| Subscriptable    | :white_check_mark: | :x:                | :white_check_mark: | :white_check_mark:    | :white_check_mark: |
-| Item assignment  | :white_check_mark: | :x:                | :white_check_mark: | :white_check_mark:*   | :white_check_mark: |
-| `vstack`         | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark:    | :white_check_mark: |
-| Sparse rows      | :white_check_mark: | :white_check_mark: | :x:                | :white_check_mark:    | :white_check_mark: |
-| Fill value       | :x:                | :x:                | :x:                | :x:                   | :white_check_mark: |
-| 3D               | :x:                | :x:                | :x:                | :x:                   | :white_check_mark: |
-
-- Subscriptable: ability to access an entry by index, e.g. `A[i, j]`
-- Item assignment: ability to update an entry by index, e.g. `A[i, j] = x`
-- `vstack`: ability to vertically stack chunks of sparse arrays together
-(also called `concatenate`)
-- Sparse rows: no storage is used for empty rows. This is not
-the case for LIL, since an empty list is stored for empty rows.
-- Fill value - specify a default fill value
-- 3D - support three dimensions
-
-`*` CSR arrays technically support item assignment,
-but it's expensive so shouldn't be used to build sparse matrices.
-
-None of the `scipy.sparse` implementations support fill values or 3D matrices,
-but the `pydata.sparse` implementations do.
-
-Summary: DOK is the only sparse implementation that is appropriate for doing
-heap updates. COO and CSR don't support efficient inserts, and LIL is not space
-efficient since it stores an empty list for empty rows.
 
 ### Threaded implementation
 
@@ -186,6 +164,42 @@ python3 -m venv venv  # python 3 is required!
 pip install -e .
 pip install pyspark==2.3.1 pytest
 ```
+
+### Sparse arrays
+
+Sparse arrays were investigated for heap updates in MapReduce. Sparse arrays
+do not use NumPy arrays, so they do not benefit from Numba optimizations, so
+they were not used further.
+
+The following table lists the desired properties of sparse arrays for this purpose.
+
+| Property         | Dictionary Of Keys | COOrdinate         | LInked List        | Compressed Sparse Row | pydata.sparse.DOK  |
+| ---------------- | ------------------ | ------------------ | ------------------ | --------------------- | ------------------ |
+| Subscriptable    | :white_check_mark: | :x:                | :white_check_mark: | :white_check_mark:    | :white_check_mark: |
+| Item assignment  | :white_check_mark: | :x:                | :white_check_mark: | :white_check_mark:*   | :white_check_mark: |
+| `vstack`         | :white_check_mark: | :white_check_mark: | :white_check_mark: | :white_check_mark:    | :white_check_mark: |
+| Sparse rows      | :white_check_mark: | :white_check_mark: | :x:                | :white_check_mark:    | :white_check_mark: |
+| Fill value       | :x:                | :x:                | :x:                | :x:                   | :white_check_mark: |
+| 3D               | :x:                | :x:                | :x:                | :x:                   | :white_check_mark: |
+
+- Subscriptable: ability to access an entry by index, e.g. `A[i, j]`
+- Item assignment: ability to update an entry by index, e.g. `A[i, j] = x`
+- `vstack`: ability to vertically stack chunks of sparse arrays together
+(also called `concatenate`)
+- Sparse rows: no storage is used for empty rows. This is not
+the case for LIL, since an empty list is stored for empty rows.
+- Fill value - specify a default fill value
+- 3D - support three dimensions
+
+`*` CSR arrays technically support item assignment,
+but it's expensive so shouldn't be used to build sparse matrices.
+
+None of the `scipy.sparse` implementations support fill values or 3D matrices,
+but the `pydata.sparse` implementations do.
+
+Summary: DOK is the only sparse implementation that is appropriate for doing
+heap updates. COO and CSR don't support efficient inserts, and LIL is not space
+efficient since it stores an empty list for empty rows.
 
 [Dong]: http://www.cs.princeton.edu/cass/papers/www11.pdf
 [Scanpy]: https://scanpy.readthedocs.io
