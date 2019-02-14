@@ -49,13 +49,13 @@ def chunk_heap_updates(heap_updates, num_heap_updates, sorter, chunk_size):
     chunk_boundaries = [i * chunk_size for i in range(int(math.ceil(float(num_heap_updates) / chunk_size)) + 1)]
     return np.searchsorted(row_numbers, chunk_boundaries, side='left', sorter=sorter)
 
-@numba.njit('i8[:](f8[:, :], i8, i8)')
-def sort_and_chunk_heap_updates(heap_updates, num_heap_updates, chunk_size):
+@numba.njit('i8[:](f8[:, :], i8, i8, i8)')
+def sort_and_chunk_heap_updates(heap_updates, num_heap_updates, chunk_size, n_vertices):
     """Take an array of unsorted heap updates and sort in-place (by row number)
     and return the offsets for each chunk."""
     row_numbers = heap_updates[:num_heap_updates, 0]
     heap_updates = heap_updates[:num_heap_updates][row_numbers.argsort()]
-    chunk_boundaries = [i * chunk_size for i in range(int(math.ceil(float(num_heap_updates) / chunk_size)) + 1)]
+    chunk_boundaries = [i * chunk_size for i in range(int(math.ceil(float(n_vertices) / chunk_size)) + 1)]
     offsets = np.searchsorted(heap_updates[:, 0], chunk_boundaries, side='left')
     return offsets
 
@@ -86,9 +86,9 @@ def current_graph_reduce_jit(n_tasks, current_graph, heap_updates, offsets, inde
             heap_update = heap_updates[update_i, j]
             heap_push(current_graph, int(heap_update[0]), heap_update[1], int(heap_update[2]), int(heap_update[3]))
 
-@numba.njit('void(f8[:, :, :], i8[:], i8[:, :], i8, i8)', nogil=True)
-def shuffle_jit(heap_updates, heap_update_counts, offsets, chunk_size, index):
-    o = sort_and_chunk_heap_updates(heap_updates[index], heap_update_counts[index], chunk_size)
+@numba.njit('void(f8[:, :, :], i8[:], i8[:, :], i8, i8, i8)', nogil=True)
+def shuffle_jit(heap_updates, heap_update_counts, offsets, chunk_size, n_vertices, index):
+    o = sort_and_chunk_heap_updates(heap_updates[index], heap_update_counts[index], chunk_size, n_vertices)
     offsets[index, :o.shape[0]] = o
 
 def init_current_graph_threaded(data, n_neighbors, chunk_size=4, threads=2):
@@ -119,7 +119,7 @@ def init_current_graph_threaded(data, n_neighbors, chunk_size=4, threads=2):
     offsets = np.zeros((n_tasks, max_count), dtype=int)
 
     def shuffle(index):
-        return shuffle_jit(heap_updates, heap_update_counts, offsets, chunk_size, index)
+        return shuffle_jit(heap_updates, heap_update_counts, offsets, chunk_size, n_vertices, index)
 
     for _ in executor.map(shuffle, range(n_tasks)):
         pass
@@ -194,7 +194,7 @@ def build_candidates_threaded(current_graph, n_vertices, n_neighbors, max_candid
     offsets = np.zeros((n_tasks, max_count), dtype=int)
 
     def shuffle(index):
-        return shuffle_jit(heap_updates, heap_update_counts, offsets, chunk_size, index)
+        return shuffle_jit(heap_updates, heap_update_counts, offsets, chunk_size, n_vertices, index)
 
     for _ in executor.map(shuffle, range(n_tasks)):
         pass
@@ -288,7 +288,7 @@ def nn_descent(data, n_neighbors, rng_state, max_candidates=50,
         offsets = np.zeros((n_tasks, max_count), dtype=int)
 
         def shuffle(index):
-            return shuffle_jit(heap_updates, heap_update_counts, offsets, chunk_size, index)
+            return shuffle_jit(heap_updates, heap_update_counts, offsets, chunk_size, n_vertices, index)
 
         for _ in executor.map(shuffle, range(n_tasks)):
             pass

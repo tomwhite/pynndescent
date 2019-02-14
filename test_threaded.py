@@ -93,7 +93,7 @@ def test_sort_and_chunk_heap_updates():
     ], dtype=np.float64)
     num_heap_updates = 5
     chunk_size = 2
-    offsets = threaded.sort_and_chunk_heap_updates(heap_updates, num_heap_updates, chunk_size)
+    offsets = threaded.sort_and_chunk_heap_updates(heap_updates, num_heap_updates, chunk_size, 5)
 
     assert_allclose(offsets, np.array([0, 1, 3, 5]))
 
