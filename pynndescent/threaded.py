@@ -8,25 +8,6 @@ from pynndescent.utils import deheap_sort, heap_push, make_heap, rejection_sampl
 
 # NNDescent algorithm
 
-def init_current_graph(data, n_neighbors):
-    # This is just a copy from make_nn_descent -> nn_descent
-    rng_state = np.empty((3,), dtype=np.int64)
-    dist = distances.named_distances['euclidean']
-
-    current_graph = make_heap(data.shape[0], n_neighbors)
-    # for each row i
-    for i in range(data.shape[0]):
-        # choose K rows from the whole matrix
-        seed(rng_state, i)
-        indices = rejection_sample(n_neighbors, data.shape[0], rng_state)
-        # and work out the dist from row i to each of the random K rows
-        for j in range(indices.shape[0]):
-            d = dist(data[i], data[indices[j]])
-            heap_push(current_graph, i, d, indices[j], 1)
-            heap_push(current_graph, indices[j], d, i, 1)
-
-    return current_graph
-
 @numba.njit('i8[:](i8, i8, i8)')
 def chunk_rows(chunk_size, index, n_vertices):
     return np.arange(chunk_size * index, min(chunk_size * (index + 1), n_vertices))

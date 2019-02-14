@@ -15,7 +15,7 @@ def test_init_current_graph():
     data = np.array([[-1, -1], [-2, -1], [-3, -2], [1, 1], [2, 1], [3, 2]], dtype=np.float32)
     n_neighbors = 2
 
-    current_graph = threaded.init_current_graph(data, n_neighbors)
+    current_graph = pynndescent_.init_current_graph(data, n_neighbors)
     current_graph_threaded = threaded.init_current_graph_threaded(data, n_neighbors, chunk_size=4)
 
     assert_allclose(current_graph_threaded, current_graph)
@@ -26,11 +26,11 @@ def test_build_candidates():
     n_neighbors = 2
     max_candidates = 8
 
-    current_graph = threaded.init_current_graph(data, n_neighbors)
+    current_graph = pynndescent_.init_current_graph(data, n_neighbors)
     new_candidate_neighbors, old_candidate_neighbors = \
         utils.build_candidates(current_graph, n_vertices, n_neighbors, max_candidates, rng_state=new_rng_state())
 
-    current_graph = threaded.init_current_graph(data, n_neighbors)
+    current_graph = pynndescent_.init_current_graph(data, n_neighbors)
     new_candidate_neighbors_threaded, old_candidate_neighbors_threaded = \
         threaded.build_candidates_threaded(current_graph, n_vertices, n_neighbors, max_candidates, chunk_size=4, rng_state=new_rng_state())
 

@@ -2,10 +2,9 @@ from functools import partial
 import math
 import numpy as np
 
-from pynndescent import distances
-from pynndescent.heap import make_heap, make_heap_rdd, heap_push
+from pynndescent.heap import make_heap_rdd
 from pynndescent.threaded import chunk_rows, sort_heap_updates, chunk_heap_updates, current_graph_map_jit, apply_heap_updates_jit, apply_new_and_old_heap_updates_jit, candidates_map_jit, nn_descent_map_jit
-from pynndescent.utils import deheap_sort, rejection_sample, seed
+from pynndescent.utils import deheap_sort, make_heap
 
 # Chunking functions
 # Could use Zarr/Zappy/Anndata for these
@@ -39,25 +38,6 @@ def to_local_rows(sc, arr, chunks):
     return [func(i) for i in chunk_indices]
 
 # NNDescent algorithm
-
-def init_current_graph(data, n_neighbors):
-    # This is just a copy from make_nn_descent -> nn_descent
-    rng_state = np.empty((3,), dtype=np.int64)
-    dist = distances.named_distances['euclidean']
-
-    current_graph = make_heap(data.shape[0], n_neighbors)
-    # for each row i
-    for i in range(data.shape[0]):
-        # choose K rows from the whole matrix
-        seed(rng_state, i)
-        indices = rejection_sample(n_neighbors, data.shape[0], rng_state)
-        # and work out the dist from row i to each of the random K rows
-        for j in range(indices.shape[0]):
-            d = dist(data[i], data[indices[j]])
-            heap_push(current_graph, i, d, indices[j], 1)
-            heap_push(current_graph, indices[j], d, i, 1)
-
-    return current_graph
 
 def init_current_graph_rdd(sc, data_broadcast, data_shape, n_neighbors, chunk_size):
     n_vertices = data_shape[0]

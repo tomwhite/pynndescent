@@ -46,7 +46,7 @@ class TestSpark(unittest.TestCase):
         data_broadcast = self.sc.broadcast(data)
         n_neighbors = 2
 
-        current_graph = spark.init_current_graph(data, n_neighbors)
+        current_graph = pynndescent_.init_current_graph(data, n_neighbors)
         current_graph_rdd = spark.init_current_graph_rdd(self.sc, data_broadcast, data.shape, n_neighbors, chunk_size=4)
 
         current_graph_rdd_materialized = from_rdd(current_graph_rdd)
@@ -60,7 +60,7 @@ class TestSpark(unittest.TestCase):
         n_neighbors = 2
         max_candidates = 8
 
-        current_graph = spark.init_current_graph(data, n_neighbors)
+        current_graph = pynndescent_.init_current_graph(data, n_neighbors)
         new_candidate_neighbors, old_candidate_neighbors =\
             utils.build_candidates(current_graph, n_vertices, n_neighbors, max_candidates, rng_state=new_rng_state())
 
