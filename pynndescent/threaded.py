@@ -246,6 +246,11 @@ def nn_descent(data, n_neighbors, rng_state, chunk_size, max_candidates=50,
 
     current_graph = init_current_graph_threaded(data, n_neighbors, chunk_size, threads)
 
+    # store the updates in an array
+    max_heap_update_count = chunk_size * max_candidates * max_candidates * 4
+    heap_updates = np.zeros((n_tasks, max_heap_update_count, 4))
+    heap_update_counts = np.zeros((n_tasks,), dtype=int)
+
     for n in range(n_iters):
 
         (new_candidate_neighbors,
@@ -256,11 +261,6 @@ def nn_descent(data, n_neighbors, rng_state, chunk_size, max_candidates=50,
                                                      chunk_size,
                                                      rng_state, rho,
                                                      threads)
-
-        # store the updates in an array
-        max_heap_update_count = chunk_size * max_candidates * max_candidates * 4
-        heap_updates = np.zeros((n_tasks, max_heap_update_count, 4))
-        heap_update_counts = np.zeros((n_tasks,), dtype=int)
 
         def nn_descent_map(index):
             rows = chunk_rows(chunk_size, index, n_vertices)

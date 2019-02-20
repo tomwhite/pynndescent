@@ -7,7 +7,7 @@ for algorithm, threads in (('scikitlearn_brute', 1), ('scikitlearn_ball_tree', 1
     results_subset = results[(results['algorithm'] == algorithm) & (results['threads'] == threads)][['rows','duration']]
     plt.loglog('rows', 'duration', data=results_subset, marker='o', label='{} ({})'.format(algorithm, threads))
 
-plt.title("Nearest neighbor algorithms")
+plt.title("Nearest neighbor algorithms (D=128, NN=25)")
 plt.xlabel('Rows')
 plt.ylabel('Duration (s)')
 plt.legend()
