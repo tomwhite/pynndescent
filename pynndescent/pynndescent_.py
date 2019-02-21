@@ -183,7 +183,7 @@ def make_nn_descent(dist, dist_args):
     #@numba.jit(fastmath=True)
     def nn_descent(data, n_neighbors, rng_state, max_candidates=50,
                    n_iters=10, delta=0.001, rho=0.5,
-                   rp_tree_init=True, leaf_array=None, verbose=False):
+                   rp_tree_init=True, leaf_array=None, verbose=False, threads=1):
         n_vertices = data.shape[0]
 
         current_graph = make_heap(data.shape[0], n_neighbors)
@@ -225,8 +225,6 @@ def make_nn_descent(dist, dist_args):
                                                          max_candidates,
                                                          rng_state, rho)
 
-            print("nnd start")
-            threads = 4
             chunk_size = n_vertices // threads
             n_tasks = int(math.ceil(float(n_vertices) / chunk_size))
             def nn_descent_map(index):
@@ -238,7 +236,6 @@ def make_nn_descent(dist, dist_args):
             for index, count in executor.map(nn_descent_map, range(n_tasks)):
                 c += count
 
-            print("it")
             if c <= delta * n_neighbors * data.shape[0]:
                 break
 
@@ -495,7 +492,8 @@ class NNDescent(object):
                  max_candidates=20,
                  n_iters=10,
                  delta=0.001,
-                 rho=0.5):
+                 rho=0.5,
+                 threads=1):
 
         self.n_trees = n_trees
         self.n_neighbors = n_neighbors
@@ -570,7 +568,8 @@ class NNDescent(object):
                                               self.delta,
                                               self.rho,
                                               True,
-                                              leaf_array)
+                                              leaf_array,
+                                              threads=threads)
         elif algorithm == 'alternative':
             self._search = make_initialized_nnd_search(self._distance_func,
                                                        self._dist_args)

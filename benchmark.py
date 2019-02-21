@@ -42,9 +42,8 @@ def scikitlearn_ball_tree(X, threads=1, n_neighbors=25, max_candidates=50):
     return indices, distances, t1-t0
 
 def pynndescent_regular(X, threads=1, n_neighbors=25, max_candidates=50):
-    os.environ["NUMBA_NUM_THREADS"] = str(threads)
     t0 = time.time()
-    index = NNDescent(X, n_neighbors=n_neighbors, max_candidates=max_candidates, tree_init=False)
+    index = NNDescent(X, n_neighbors=n_neighbors, max_candidates=max_candidates, tree_init=False, threads=threads)
     indices, distances = index._neighbor_graph
     t1 = time.time()
     return indices, distances, t1-t0
