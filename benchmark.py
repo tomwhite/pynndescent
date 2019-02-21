@@ -86,7 +86,7 @@ def beefy_experiments():
         for threads in (8, 16, 32, 64):
             yield (pynndescent_threaded, rows, threads, n_neighbors, max_candidates)
 
-all_experiments = local_experiments
+all_experiments = beefy_experiments
 
 def generate_experiments(predicate=None):
     for exp in all_experiments():
@@ -96,7 +96,7 @@ def generate_experiments(predicate=None):
 # modify the predicate to run a subset of experiments
 #predicate = lambda exp: (exp[0] == scikitlearn_brute or exp[0] == pynndescent_threaded) and exp[1] >= 100000 and exp[2] == 8
 predicate = lambda exp: exp[0] == pynndescent_regular and exp[1] == 20000 and exp[2] == 8
-for algorithm, rows, threads, n_neighbors, max_candidates in generate_experiments(predicate):
+for algorithm, rows, threads, n_neighbors, max_candidates in generate_experiments():
     indices_sk, distances, t = algorithm(dataset[:rows], threads, n_neighbors, max_candidates)
     print("{},{},{},{},{},{}".format(algorithm.__name__, threads, rows, n_neighbors, max_candidates, t))
     # print(indices_sk)
