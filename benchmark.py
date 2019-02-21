@@ -1,3 +1,16 @@
+# To run the "beefy" experiment
+#
+# Run on a GCE instance
+# n1-standard-64 - 240GB mem, 100GB disk
+# gcloud compute --project=hca-scale instances create ll-knn --zone=us-east1-b --machine-type=n1-standard-64 --subnet=default --network-tier=PREMIUM --maintenance-policy=MIGRATE --service-account=218219996328-compute@developer.gserviceaccount.com --scopes=https://www.googleapis.com/auth/cloud-platform --image=debian-9-stretch-v20190213 --image-project=debian-cloud --boot-disk-size=100GB --boot-disk-type=pd-standard --boot-disk-device-name=ll-knn
+#
+# sudo apt-get update && sudo apt-get install -y git python3-pip
+# pip3 install numba numpy scipy scikit-learn
+# pip3 install git+https://github.com/tomwhite/pynndescent@benchmark
+# pip3 list
+
+
+import os
 import time
 
 import numpy as np
@@ -27,6 +40,7 @@ def scikitlearn_ball_tree(X, threads=1, n_neighbors=25, max_candidates=50):
     return indices, distances, t1-t0
 
 def pynndescent_regular(X, threads=1, n_neighbors=25, max_candidates=50):
+    os.environ["NUMBA_NUM_THREADS"] = str(threads)
     t0 = time.time()
     index = NNDescent(X, n_neighbors=n_neighbors, max_candidates=max_candidates, tree_init=False)
     indices, distances = index._neighbor_graph
@@ -43,7 +57,7 @@ def accuracy(expected, actual):
     # Look at the size of corresponding row intersections
     return np.array([len(np.intersect1d(x, y)) for x, y in zip(expected, actual)]).sum() / expected.size
 
-def all_experiments():
+def local_experiments():
     n_neighbors = 25
     max_candidates = 50
     for rows in (1000, 5000, 10000, 20000, 50000, 100000):
@@ -61,6 +75,18 @@ def all_experiments():
                 continue
             yield (pynndescent_threaded, rows, threads, n_neighbors, max_candidates)
 
+def beefy_experiments():
+    n_neighbors = 25
+    max_candidates = 50
+    for rows in (50000, 100000):
+        for threads in (1, 2, 4, 8, 16, 32, 64):
+            yield (pynndescent_regular, rows, threads, n_neighbors, max_candidates)
+    for rows in (50000, 100000):
+        for threads in (8, 16, 32, 64):
+            yield (pynndescent_threaded, rows, threads, n_neighbors, max_candidates)
+
+all_experiments = beefy_experiments
+
 def generate_experiments(predicate=None):
     for exp in all_experiments():
         if predicate is None or predicate(exp):
@@ -68,8 +94,8 @@ def generate_experiments(predicate=None):
 
 # modify the predicate to run a subset of experiments
 #predicate = lambda exp: (exp[0] == scikitlearn_brute or exp[0] == pynndescent_threaded) and exp[1] >= 100000 and exp[2] == 8
-predicate = lambda exp: exp[0] == pynndescent_regular and exp[1] >= 100000
-for algorithm, rows, threads, n_neighbors, max_candidates in generate_experiments(predicate):
+predicate = lambda exp: exp[0] == pynndescent_regular and exp[2] == 1
+for algorithm, rows, threads, n_neighbors, max_candidates in generate_experiments():
     indices_sk, distances, t = algorithm(dataset[:rows], threads, n_neighbors, max_candidates)
     print("{},{},{},{},{},{}".format(algorithm.__name__, threads, rows, n_neighbors, max_candidates, t))
     # print(indices_sk)
