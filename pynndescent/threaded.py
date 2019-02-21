@@ -137,13 +137,14 @@ def candidates_map_jit(rows, n_neighbors, current_graph, heap_updates, offset):
                 hu[0] = i
                 hu[1] = d
                 hu[2] = idx
-                hu[3] = j
+                hu[3] = isn
+                hu[4] = j
                 count += 1
                 hu = heap_updates[count]
                 hu[0] = idx
                 hu[1] = d
-                hu[2] = i
-                hu[3] = j
+                hu[3] = isn
+                hu[4] = j
                 count += 1
     return count
 
