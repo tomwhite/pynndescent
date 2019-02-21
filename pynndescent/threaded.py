@@ -8,20 +8,20 @@ from pynndescent.utils import deheap_sort, heap_push, make_heap, rejection_sampl
 
 # NNDescent algorithm
 
-@numba.njit('i8[:](i8, i8, i8)')
+@numba.njit('i8[:](i8, i8, i8)', nogil=True)
 def chunk_rows(chunk_size, index, n_vertices):
     return np.arange(chunk_size * index, min(chunk_size * (index + 1), n_vertices))
 
-@numba.njit('f8[:, :](f8[:, :], i8)')
+@numba.njit('f8[:, :](f8[:, :], i8)', nogil=True)
 def sort_heap_updates(heap_updates, num_heap_updates):
     """Take an array of unsorted heap updates and sort by row number."""
     row_numbers = heap_updates[:num_heap_updates, 0]
     return heap_updates[:num_heap_updates][row_numbers.argsort()]
 
-@numba.njit('i8[:](f8[:, :], i8, i8)')
+@numba.njit('i8[:](f8[:, :], i8, i8)', nogil=True)
 def chunk_heap_updates(heap_updates, n_vertices, chunk_size):
     """Return the offsets for each chunk of sorted heap updates."""
-    chunk_boundaries = [i * chunk_size for i in range(int(math.ceil(float(n_vertices) / chunk_size)) + 1)]
+    chunk_boundaries = np.arange(int(math.ceil(float(n_vertices) / chunk_size)) + 1) * chunk_size
     offsets = np.searchsorted(heap_updates[:, 0], chunk_boundaries, side='left')
     return offsets
 
@@ -133,9 +133,17 @@ def candidates_map_jit(rows, n_neighbors, current_graph, heap_updates, offset):
             d = tau_rand(rng_state)
             if tau_rand(rng_state) < rho:
                 # updates are common to old and new - decided by 'isn' flag
-                heap_updates[count] = np.array([i, d, idx, isn, j])
+                hu = heap_updates[count]
+                hu[0] = i
+                hu[1] = d
+                hu[2] = idx
+                hu[3] = j
                 count += 1
-                heap_updates[count] = np.array([idx, d, i, isn, j])
+                hu = heap_updates[count]
+                hu[0] = idx
+                hu[1] = d
+                hu[2] = i
+                hu[3] = j
                 count += 1
     return count
 
