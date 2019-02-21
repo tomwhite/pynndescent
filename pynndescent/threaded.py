@@ -277,8 +277,8 @@ def nn_descent(data, n_neighbors, rng_state, chunk_size, max_candidates=50,
     heap_update_counts = np.zeros((n_tasks,), dtype=int)
 
     for n in range(n_iters):
-        import time
-        t0 = time.time()
+        # import time
+        # t0 = time.time()
         (new_candidate_neighbors,
          old_candidate_neighbors) = build_candidates_threaded(current_graph,
                                                      n_vertices,
@@ -287,8 +287,8 @@ def nn_descent(data, n_neighbors, rng_state, chunk_size, max_candidates=50,
                                                      chunk_size,
                                                      rng_state, rho,
                                                      threads)
-        t1 = time.time()
-        print('cand', (t1-t0))
+        # t1 = time.time()
+        # print('cand', (t1-t0))
         def nn_descent_map(index):
             rows = chunk_rows(chunk_size, index, n_vertices)
             return index, nn_descent_map_jit(rows, max_candidates, data, new_candidate_neighbors, old_candidate_neighbors, heap_updates[index], offset=0)
@@ -301,8 +301,8 @@ def nn_descent(data, n_neighbors, rng_state, chunk_size, max_candidates=50,
         for index, count in executor.map(nn_descent_map, range(n_tasks)):
             heap_update_counts[index] = count
 
-        t2 = time.time()
-        print('map', (t2-t1))
+        # t2 = time.time()
+        # print('map', (t2-t1))
 
         # sort and chunk heap updates so they can be applied in the reduce
         max_count = heap_update_counts.max()
@@ -313,16 +313,16 @@ def nn_descent(data, n_neighbors, rng_state, chunk_size, max_candidates=50,
 
         for _ in executor.map(shuffle, range(n_tasks)):
             pass
-        t3 = time.time()
-        print('shuffle', (t3-t2))
+        # t3 = time.time()
+        # print('shuffle', (t3-t2))
 
         # then run reduce functions
         c = 0
         for c_part in executor.map(nn_decent_reduce, range(n_tasks)):
             c += c_part
 
-        t4 = time.time()
-        print('red', (t4-t3))
+        # t4 = time.time()
+        # print('red', (t4-t3))
         if c <= delta * n_neighbors * data.shape[0]:
             break
 
