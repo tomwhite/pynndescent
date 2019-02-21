@@ -208,9 +208,17 @@ def nn_descent_map_jit(rows, max_candidates, data, new_candidate_neighbors, old_
                     continue
 
                 d = dist(data[p], data[q])
-                heap_updates[count] = [p, d, q, 1]
+                hu = heap_updates[count]
+                hu[0] = p
+                hu[1] = d
+                hu[2] = q
+                hu[3] = 1
                 count += 1
-                heap_updates[count] = [q, d, p, 1]
+                hu = heap_updates[count]
+                hu[0] = q
+                hu[1] = d
+                hu[2] = p
+                hu[3] = 1
                 count += 1
 
             for k in range(max_candidates):
@@ -219,9 +227,17 @@ def nn_descent_map_jit(rows, max_candidates, data, new_candidate_neighbors, old_
                     continue
 
                 d = dist(data[p], data[q])
-                heap_updates[count] = [p, d, q, 1]
+                hu = heap_updates[count]
+                hu[0] = p
+                hu[1] = d
+                hu[2] = q
+                hu[3] = 1
                 count += 1
-                heap_updates[count] = [q, d, p, 1]
+                hu = heap_updates[count]
+                hu[0] = q
+                hu[1] = d
+                hu[2] = p
+                hu[3] = 1
                 count += 1
     return count
 
