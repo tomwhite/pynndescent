@@ -6,9 +6,11 @@
 #
 # sudo apt-get update && sudo apt-get install -y git python3-pip
 # pip3 install numba numpy scipy scikit-learn
-# pip3 install git+https://github.com/tomwhite/pynndescent@benchmark
+# pip3 install git+https://github.com/tomwhite/pynndescent@benchmarks
 # pip3 list
-
+# git clone https://github.com/tomwhite/pynndescent
+# cd pynndescent
+# python3 benchmark.py
 
 import os
 import time
