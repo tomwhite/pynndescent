@@ -2,6 +2,8 @@
 #
 # License: BSD 2 clause
 
+import concurrent.futures
+import math
 import numba
 import numpy as np
 from sklearn.utils import check_random_state, check_array
@@ -123,6 +125,39 @@ def init_current_graph(data, n_neighbors):
 
     return current_graph
 
+@numba.njit('i8[:](i8, i8, i8)')
+def chunk_rows(chunk_size, index, n_vertices):
+    return np.arange(chunk_size * index, min(chunk_size * (index + 1), n_vertices))
+
+dst = dist.named_distances['euclidean']
+
+@numba.njit('i8(i8[:], i8, f4[:, :], f8[:, :, :], f8[:, :, :], f8[:, :, :])', nogil=True, fastmath=True)
+def nn_descent_jit(rows, max_candidates, data, new_candidate_neighbors, old_candidate_neighbors, current_graph):
+    c = 0
+    for i in rows:
+        for j in range(max_candidates):
+            p = int(new_candidate_neighbors[0, i, j])
+            if p < 0:
+                continue
+            for k in range(j, max_candidates):
+                q = int(new_candidate_neighbors[0, i, k])
+                if q < 0:
+                    continue
+
+                d = dst(data[p], data[q])
+                c += heap_push(current_graph, p, d, q, 1)
+                c += heap_push(current_graph, q, d, p, 1)
+
+            for k in range(max_candidates):
+                q = int(old_candidate_neighbors[0, i, k])
+                if q < 0:
+                    continue
+
+                d = dst(data[p], data[q])
+                c += heap_push(current_graph, p, d, q, 1)
+                c += heap_push(current_graph, q, d, p, 1)
+    return c
+
 def make_nn_descent(dist, dist_args):
     """Create a numba accelerated version of nearest neighbor descent
     specialised for the given distance metric and metric arguments. Numba
@@ -145,7 +180,7 @@ def make_nn_descent(dist, dist_args):
     specialised to the given metric.
     """
 
-    @numba.jit(fastmath=True)
+    #@numba.jit(fastmath=True)
     def nn_descent(data, n_neighbors, rng_state, max_candidates=50,
                    n_iters=10, delta=0.001, rho=0.5,
                    rp_tree_init=True, leaf_array=None, verbose=False):
@@ -190,30 +225,18 @@ def make_nn_descent(dist, dist_args):
                                                          max_candidates,
                                                          rng_state, rho)
 
+            print("nnd start")
+            threads = 4
+            chunk_size = n_vertices // threads
+            n_tasks = int(math.ceil(float(n_vertices) / chunk_size))
+            def nn_descent_map(index):
+                rows = chunk_rows(chunk_size, index, n_vertices)
+                return index, nn_descent_jit(rows, max_candidates, data, new_candidate_neighbors, old_candidate_neighbors, current_graph)
+            executor = concurrent.futures.ThreadPoolExecutor(max_workers=threads)
+            # run map functions
             c = 0
-            for i in range(n_vertices):
-                for j in range(max_candidates):
-                    p = int(new_candidate_neighbors[0, i, j])
-                    if p < 0:
-                        continue
-                    for k in range(j, max_candidates):
-                        q = int(new_candidate_neighbors[0, i, k])
-                        if q < 0:
-                            continue
-
-                        d = dist(data[p], data[q], *dist_args)
-                        c += heap_push(current_graph, p, d, q, 1)
-                        c += heap_push(current_graph, q, d, p, 1)
-
-                    for k in range(max_candidates):
-                        q = int(old_candidate_neighbors[0, i, k])
-                        if q < 0:
-                            continue
-
-                        d = dist(data[p], data[q], *dist_args)
-                        c += heap_push(current_graph, p, d, q, 1)
-                        c += heap_push(current_graph, q, d, p, 1)
-
+            for index, count in executor.map(nn_descent_map, range(n_tasks)):
+                c += count
 
             print("it")
             if c <= delta * n_neighbors * data.shape[0]:
