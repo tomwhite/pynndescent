@@ -68,8 +68,7 @@ def pynndescent_threaded(X, threads=1, n_neighbors=25, max_candidates=50):
     t0 = time.time()
     dist = pynndistances.named_distances["euclidean"]
     dist_args = ()
-    threaded_nn_descent = threaded.make_nn_descent(dist, dist_args)
-    indices, distances = threaded_nn_descent(X, n_neighbors=n_neighbors, max_candidates=max_candidates, rng_state=None, chunk_size=X.shape[0]//threads, threads=threads)
+    indices, distances = threaded.nn_descent(X, n_neighbors=n_neighbors, max_candidates=max_candidates, dist=dist, dist_args=dist_args, rng_state=None, chunk_size=X.shape[0]//threads, threads=threads)
     t1 = time.time()
     return indices, distances, t1-t0
 
