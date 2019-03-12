@@ -20,9 +20,7 @@ import time
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 
-from pynndescent import distances as pynndistances
 from pynndescent import NNDescent
-from pynndescent import threaded
 
 np.random.seed(42)
 
@@ -66,9 +64,8 @@ def pynndescent_regular(X, threads=1, n_neighbors=25, max_candidates=50):
 
 def pynndescent_threaded(X, threads=1, n_neighbors=25, max_candidates=50):
     t0 = time.time()
-    dist = pynndistances.named_distances["euclidean"]
-    dist_args = ()
-    indices, distances = threaded.nn_descent(X, n_neighbors=n_neighbors, max_candidates=max_candidates, dist=dist, dist_args=dist_args, rng_state=None, chunk_size=X.shape[0]//threads, threads=threads)
+    index = NNDescent(X, n_neighbors=n_neighbors, max_candidates=max_candidates, tree_init=False, algorithm='threaded', chunk_size=X.shape[0]//threads, threads=threads)
+    indices, distances = index._neighbor_graph
     t1 = time.time()
     return indices, distances, t1-t0
 
