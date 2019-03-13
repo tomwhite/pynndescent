@@ -20,11 +20,18 @@ import time
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 
+import pynndescent.distances as dst
+
 from pynndescent import NNDescent
+from pynndescent import pynndescent_
+from pynndescent import threaded
+
+INT32_MIN = np.iinfo(np.int32).min + 1
+INT32_MAX = np.iinfo(np.int32).max - 1
 
 np.random.seed(42)
 
-N = 100000
+N = 1000000
 D = 128
 dataset = np.random.rand(N, D).astype(np.float32)
 gold = {}
@@ -69,6 +76,26 @@ def pynndescent_threaded(X, threads=1, n_neighbors=25, max_candidates=50):
     t1 = time.time()
     return indices, distances, t1-t0
 
+def rp_tree_init_regular(X, threads=1, n_neighbors=25, max_candidates=50):
+    os.environ["NUMBA_NUM_THREADS"] = str(threads)
+    rng_state = np.random.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+    current_graph = pynndescent_.init_current_graph(X, dist=dst.euclidean, dist_args=(), n_neighbors=n_neighbors, rng_state=rng_state)
+    t0 = time.time()
+    rng_state = np.random.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+    pynndescent_.init_rp_tree(X, dist=dst.euclidean, dist_args=(), current_graph=current_graph, n_trees=8, leaf_size=15, rng_state=rng_state)
+    t1 = time.time()
+    return None, None, t1-t0
+
+def rp_tree_init_threaded(X, threads=1, n_neighbors=25, max_candidates=50):
+    os.environ["NUMBA_NUM_THREADS"] = str(threads)
+    rng_state = np.random.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+    current_graph = pynndescent_.init_current_graph(X, dist=dst.euclidean, dist_args=(), n_neighbors=n_neighbors, rng_state=rng_state)
+    t0 = time.time()
+    rng_state = np.random.randint(INT32_MIN, INT32_MAX, 3).astype(np.int64)
+    threaded.init_rp_tree(X, dist=dst.euclidean, dist_args=(), current_graph=current_graph, n_trees=8, leaf_size=15, chunk_size=X.shape[0]//threads, rng_state=rng_state, threads=threads)
+    t1 = time.time()
+    return None, None, t1-t0
+
 def accuracy(expected, actual):
     # Look at the size of corresponding row intersections
     return np.array([len(np.intersect1d(x, y)) for x, y in zip(expected, actual)]).sum() / expected.size
@@ -106,8 +133,20 @@ def generate_experiments(predicate=None):
 #predicate = lambda exp: (exp[0] == scikitlearn_brute or exp[0] == pynndescent_threaded) and exp[1] >= 100000 and exp[2] == 8
 #predicate = lambda exp: (exp[0] == scikitlearn_brute and exp[1] == 50000) or (exp[0] == pynndescent_regular and exp[1] == 50000) or (exp[0] == pynndescent_threaded and exp[1] == 50000 and exp[2] == 8)
 predicate = lambda exp: (exp[0] == scikitlearn_brute or exp[0] == pynndescent_regular or exp[0] == pynndescent_threaded) and exp[1] == 20000
-for algorithm, rows, threads, n_neighbors, max_candidates in generate_experiments(predicate):
-    indices, distances, t = algorithm(dataset[:rows], threads, n_neighbors, max_candidates)
-    acc = accuracy(gold[rows], indices) if rows in gold else -1
-    print("{},{},{},{},{},{},{}".format(algorithm.__name__, threads, rows, n_neighbors, max_candidates, t, acc))
+# for algorithm, rows, threads, n_neighbors, max_candidates in generate_experiments(predicate):
+#     indices, distances, t = algorithm(dataset[:rows], threads, n_neighbors, max_candidates)
+#     acc = accuracy(gold[rows], indices) if rows in gold else -1
+#     print("{},{},{},{},{},{},{}".format(algorithm.__name__, threads, rows, n_neighbors, max_candidates, t, acc))
 
+
+def rep_init_experiments():
+    n_neighbors = 25
+    max_candidates = 50
+    for rows in (1000, 5000, 10000, 20000, 50000, 100000, 1000000):
+        for threads in (8,):
+            yield (rp_tree_init_threaded, rows, threads, n_neighbors, max_candidates)
+
+for algorithm, rows, threads, n_neighbors, max_candidates in rep_init_experiments():
+    indices, distances, t = algorithm(dataset[:rows], threads, n_neighbors, max_candidates)
+    acc = -1
+    print("{},{},{},{},{},{},{}".format(algorithm.__name__, threads, rows, n_neighbors, max_candidates, t, acc))
