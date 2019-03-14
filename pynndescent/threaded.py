@@ -5,6 +5,11 @@ import numpy as np
 
 import pynndescent.distances as dst
 
+from pynndescent.rp_trees import (make_euclidean_tree,
+                                  make_angular_tree,
+                                  flatten_tree,
+                                  search_flat_tree)
+
 from pynndescent.utils import (
     heap_push,
     make_heap,
@@ -171,6 +176,115 @@ def init_current_graph(
         pass
 
     return current_graph
+
+
+def make_init_rp_tree_map_jit(dist, dist_args):
+    @numba.njit("i8(i8[:], i8[:, :], f4[:, :], f8[:, :])", nogil=True, fastmath=True)
+    def init_rp_tree_map_jit(rows, leaf_array, data, heap_updates):
+        count = 0
+        for n in rows:
+            if n >= leaf_array.shape[0]:
+                break
+            tried = set([(-1, -1)])
+            for i in range(leaf_array.shape[1]):
+                la_n_i = leaf_array[n, i]
+                if la_n_i < 0:
+                    break
+                for j in range(i + 1, leaf_array.shape[1]):
+                    la_n_j = leaf_array[n, j]
+                    if la_n_j < 0:
+                        break
+                    if (la_n_i, la_n_j) in tried:
+                        continue
+                    d = dist(data[la_n_i], data[la_n_j], *dist_args)
+                    hu = heap_updates[count]
+                    hu[0] = la_n_i
+                    hu[1] = d
+                    hu[2] = la_n_j
+                    hu[3] = 1
+                    count += 1
+                    hu = heap_updates[count]
+                    hu[0] = la_n_j
+                    hu[1] = d
+                    hu[2] = la_n_i
+                    hu[3] = 1
+                    count += 1
+                    tried.add((la_n_i, la_n_j))
+                    tried.add((la_n_j, la_n_i))
+        return count
+    return init_rp_tree_map_jit
+
+
+@numba.njit("void(i8, f8[:, :, :], f8[:, :, :], i8[:, :], i8)", nogil=True)
+def init_rp_tree_reduce_jit(n_tasks, current_graph, heap_updates, offsets, index):
+    for update_i in range(n_tasks):
+        o = offsets[update_i]
+        for j in range(o[index], o[index + 1]):
+            heap_update = heap_updates[update_i, j]
+            heap_push(
+                current_graph,
+                int(heap_update[0]),
+                heap_update[1],
+                int(heap_update[2]),
+                int(heap_update[3]),
+            )
+
+
+def init_rp_tree(data, dist, dist_args, current_graph, n_trees, leaf_size, chunk_size, rng_state, threads=2, seed_per_row=False, leaf_array=None):
+    if leaf_array is None:
+        indices = np.arange(data.shape[0])
+        _rp_forest = [
+            flatten_tree(make_euclidean_tree(data, indices,
+                                             rng_state,
+                                             leaf_size),
+                         leaf_size)
+            for i in range(n_trees)
+        ]
+        leaf_array = np.vstack([tree.indices for tree in _rp_forest])
+
+    n_vertices = data.shape[0]
+    n_tasks = int(math.ceil(float(n_vertices) / chunk_size))
+
+    # store the updates in an array
+    max_heap_update_count = chunk_size * leaf_array.shape[1] * leaf_array.shape[1] * 2
+    heap_updates = np.zeros((n_tasks, max_heap_update_count, 4))
+    heap_update_counts = np.zeros((n_tasks,), dtype=int)
+
+    init_rp_tree_map_jit = make_init_rp_tree_map_jit(dist, dist_args)
+
+    def init_rp_tree_map(index):
+        rows = chunk_rows(chunk_size, index, n_vertices)
+        return (
+            index,
+            init_rp_tree_map_jit(
+                rows, leaf_array, data, heap_updates[index])
+        )
+
+    def init_rp_tree_reduce(index):
+        return init_rp_tree_reduce_jit(
+            n_tasks, current_graph, heap_updates, offsets, index
+        )
+
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=threads)
+    # run map functions
+    for index, count in executor.map(init_rp_tree_map, range(n_tasks)):
+        heap_update_counts[index] = count
+
+    # sort and chunk heap updates so they can be applied in the reduce
+    max_count = heap_update_counts.max()
+    offsets = np.zeros((n_tasks, max_count), dtype=int)
+
+    def shuffle(index):
+        return shuffle_jit(
+            heap_updates, heap_update_counts, offsets, chunk_size, n_vertices, index
+        )
+
+    for _ in executor.map(shuffle, range(n_tasks)):
+        pass
+
+    # then run reduce functions
+    for _ in executor.map(init_rp_tree_reduce, range(n_tasks)):
+        pass
 
 
 @numba.njit("i8(i8[:], i8, f8[:, :, :], f8[:, :], i8, f8, i8[:], b1)", nogil=True)
@@ -452,6 +566,10 @@ def nn_descent(
     current_graph = init_current_graph(
         data, dist, dist_args, n_neighbors, chunk_size, rng_state, threads, seed_per_row=seed_per_row
     )
+
+    if rp_tree_init:
+        # TODO: expect leaf_array to be initialized already, so shouldn't have to pass in tree params
+        init_rp_tree(data, dist, dist_args, current_graph, 0, 0, chunk_size, rng_state, threads, seed_per_row, leaf_array)
 
     # store the updates in an array
     # note that the factor here is `n_neighbors * n_neighbors`, not `max_candidates * max_candidates`

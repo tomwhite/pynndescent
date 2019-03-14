@@ -20,17 +20,17 @@ max_candidates = 8
 dist = distances.named_distances["euclidean"]
 dist_args = ()
 
-# np.random.seed(42)
-#
-# N = 100000
-# D = 128
-# dataset = np.random.rand(N, D).astype(np.float32)
-#
-# chunk_size = 4000//8
-# n_neighbors = 25
-# max_candidates = 50
-#
-# data = dataset[:4000].astype(np.float32)
+np.random.seed(42)
+
+N = 100000
+D = 128
+dataset = np.random.rand(N, D).astype(np.float32)
+
+chunk_size = 100//8
+n_neighbors = 25
+max_candidates = 50
+
+data = dataset[:100].astype(np.float32)
 
 # In all tests, set seed_per_row=True so that we can comapre the regular
 # algorithm against the threded algorithm.
@@ -50,6 +50,16 @@ def test_init_current_graph():
         data, dist, dist_args, n_neighbors, chunk_size=chunk_size, rng_state=new_rng_state(),
         seed_per_row=True
     )
+
+    assert_allclose(current_graph_threaded, current_graph)
+
+
+def test_init_rp_tree():
+    current_graph = pynndescent_.init_current_graph(data, dist, dist_args, n_neighbors, rng_state=new_rng_state(), seed_per_row=True)
+    pynndescent_.init_rp_tree(data, dist, dist_args, current_graph, n_trees=8, leaf_size=15, rng_state=new_rng_state(), seed_per_row=True)
+
+    current_graph_threaded = pynndescent_.init_current_graph(data, dist, dist_args, n_neighbors, rng_state=new_rng_state(), seed_per_row=True)
+    threaded.init_rp_tree(data, dist, dist_args, current_graph_threaded, n_trees=8, leaf_size=15, chunk_size=chunk_size, rng_state=new_rng_state(), seed_per_row=True)
 
     assert_allclose(current_graph_threaded, current_graph)
 
