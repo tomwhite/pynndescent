@@ -143,7 +143,12 @@ def rep_init_experiments():
     n_neighbors = 25
     max_candidates = 50
     for rows in (1000, 5000, 10000, 20000, 50000, 100000, 1000000):
-        for threads in (8,):
+        for threads in (1,):
+            yield (rp_tree_init_regular, rows, threads, n_neighbors, max_candidates)
+    for rows in (1000, 5000, 10000, 20000, 50000, 100000, 1000000):
+        for threads in cores_powers_of_two():
+            if rows >= 50000 and threads < 4:
+                continue
             yield (rp_tree_init_threaded, rows, threads, n_neighbors, max_candidates)
 
 for algorithm, rows, threads, n_neighbors, max_candidates in rep_init_experiments():
