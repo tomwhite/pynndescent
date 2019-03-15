@@ -9,6 +9,7 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from scipy.sparse import lil_matrix
 from scipy.sparse.csgraph import minimum_spanning_tree
 
+import pynndescent.dask as dask
 import pynndescent.distances as dist
 import pynndescent.threaded as threaded
 
@@ -506,6 +507,20 @@ class NNDescent(object):
                                                        True,
                                                        leaf_array,
                                                        threads=threads,
+                                                       seed_per_row=seed_per_row)
+        elif algorithm == 'dask':
+            self._neighbor_graph = dask.nn_descent(self._raw_data,
+                                                       self.n_neighbors,
+                                                       self.rng_state,
+                                                       chunk_size,
+                                                       self.max_candidates,
+                                                       self._distance_func,
+                                                       self._dist_args,
+                                                       self.n_iters,
+                                                       self.delta,
+                                                       self.rho,
+                                                       True,
+                                                       leaf_array,
                                                        seed_per_row=seed_per_row)
         elif algorithm == 'standard' or leaf_array.shape[0] == 1:
             self._neighbor_graph = nn_descent(self._raw_data,
