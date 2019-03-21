@@ -69,6 +69,30 @@ def pynndescent_threaded(X, threads=1, n_neighbors=25, max_candidates=50):
     t1 = time.time()
     return indices, distances, t1-t0
 
+def pynndescent_dask_threaded(X, threads=1, n_neighbors=25, max_candidates=50):
+    from multiprocessing.pool import ThreadPool
+    import dask
+    dask.config.set(scheduler='threads')
+    dask.config.set(pool=ThreadPool(threads))
+    t0 = time.time()
+    index = NNDescent(X, n_neighbors=n_neighbors, max_candidates=max_candidates, tree_init=False, algorithm='dask', chunk_size=X.shape[0]//threads)
+    indices, distances = index._neighbor_graph
+    t1 = time.time()
+    return indices, distances, t1-t0
+
+def pynndescent_dask_distributed(X, threads=1, n_neighbors=25, max_candidates=50):
+    import dask
+    dask.config.set(scheduler='distributed')
+    from dask.distributed import Client, LocalCluster
+    cluster = LocalCluster(n_workers=threads)
+    client = Client(cluster)
+    t0 = time.time()
+    index = NNDescent(X, n_neighbors=n_neighbors, max_candidates=max_candidates, tree_init=False, algorithm='dask', chunk_size=X.shape[0]//threads)
+    indices, distances = index._neighbor_graph
+    t1 = time.time()
+    cluster.close()
+    return indices, distances, t1-t0
+
 def accuracy(expected, actual):
     # Look at the size of corresponding row intersections
     return np.array([len(np.intersect1d(x, y)) for x, y in zip(expected, actual)]).sum() / expected.size
@@ -96,6 +120,20 @@ def all_experiments():
             if rows >= 1000000 and threads < n_cores:
                 continue
             yield (pynndescent_threaded, rows, threads, n_neighbors, max_candidates)
+    for rows in (1000, 5000, 10000, 20000, 50000, 100000, 1000000):
+        for threads in cores_powers_of_two():
+            if rows >= 50000 and threads < 4:
+                continue
+            if rows >= 1000000 and threads < n_cores:
+                continue
+            yield (pynndescent_dask_threaded, rows, threads, n_neighbors, max_candidates)
+    for rows in (1000, 5000, 10000, 20000, 50000, 100000, 1000000):
+        for threads in cores_powers_of_two():
+            if rows >= 50000 and threads < 4:
+                continue
+            if rows >= 1000000 and threads < n_cores:
+                continue
+            yield (pynndescent_dask_distributed, rows, threads, n_neighbors, max_candidates)
 
 def generate_experiments(predicate=None):
     for exp in all_experiments():
@@ -106,7 +144,7 @@ if __name__ == '__main__':
     # modify the predicate to run a subset of experiments
     #predicate = lambda exp: (exp[0] == scikitlearn_brute or exp[0] == pynndescent_threaded) and exp[1] >= 100000 and exp[2] == 8
     #predicate = lambda exp: (exp[0] == scikitlearn_brute and exp[1] == 50000) or (exp[0] == pynndescent_regular and exp[1] == 50000) or (exp[0] == pynndescent_threaded and exp[1] == 50000 and exp[2] == 8)
-    predicate = lambda exp: (exp[0] == scikitlearn_brute or exp[0] == pynndescent_regular or exp[0] == pynndescent_threaded) and exp[1] == 20000
+    predicate = lambda exp: (exp[0] == scikitlearn_brute or exp[0] == pynndescent_regular or exp[0] == pynndescent_threaded or exp[0] == pynndescent_dask_distributed) and exp[1] == 20000
     for algorithm, rows, threads, n_neighbors, max_candidates in generate_experiments(predicate):
         indices, distances, t = algorithm(dataset[:rows], threads, n_neighbors, max_candidates)
         acc = accuracy(gold[rows], indices) if rows in gold else -1
