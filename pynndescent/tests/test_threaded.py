@@ -85,13 +85,7 @@ def test_init_rp_tree():
     leaf_array = rptree_leaf_array(_rp_forest)
     parallel = Parallel(n_jobs=2, prefer="threads")
     threaded.init_rp_tree(
-        data,
-        dist,
-        dist_args,
-        current_graph_threaded,
-        leaf_array,
-        chunk_size,
-        parallel,
+        data, dist, dist_args, current_graph_threaded, leaf_array, chunk_size, parallel
     )
 
     assert_allclose(current_graph_threaded, current_graph)
