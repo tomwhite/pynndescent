@@ -129,7 +129,7 @@ def init_current_graph(
     n_neighbors,
     chunk_size,
     rng_state,
-    threads=2,
+    parallel,
     seed_per_row=False,
 ):
 
@@ -166,7 +166,6 @@ def init_current_graph(
             n_tasks, current_graph, heap_updates, offsets, index
         )
 
-    parallel = Parallel(prefer="threads")
     # run map functions
     for index, count in parallel(parallel_calls(current_graph_map, n_tasks)):
         heap_update_counts[index] = count
@@ -242,7 +241,7 @@ def init_rp_tree_reduce_jit(n_tasks, current_graph, heap_updates, offsets, index
 
 
 def init_rp_tree(
-    data, dist, dist_args, current_graph, leaf_array, chunk_size, threads=2
+    data, dist, dist_args, current_graph, leaf_array, chunk_size, parallel
 ):
     n_vertices = data.shape[0]
     n_tasks = int(math.ceil(float(n_vertices) / chunk_size))
@@ -266,7 +265,6 @@ def init_rp_tree(
             n_tasks, current_graph, heap_updates, offsets, index
         )
 
-    parallel = Parallel(prefer="threads")
     # run map functions
     for index, count in parallel(parallel_calls(init_rp_tree_map, n_tasks)):
         heap_update_counts[index] = count
@@ -370,8 +368,8 @@ def new_build_candidates(
     max_candidates,
     chunk_size,
     rng_state,
-    rho=0.5,
-    threads=2,
+    rho,
+    parallel,
     seed_per_row=False,
 ):
 
@@ -413,7 +411,6 @@ def new_build_candidates(
             index,
         )
 
-    parallel = Parallel(prefer="threads")
     # run map functions
     for index, count in parallel(parallel_calls(candidates_map, n_tasks)):
         heap_update_counts[index] = count
@@ -557,14 +554,14 @@ def nn_descent(
     rp_tree_init=False,
     leaf_array=None,
     verbose=False,
-    threads=2,
+    n_jobs=None,
     seed_per_row=False,
 ):
 
     if rng_state is None:
         rng_state = new_rng_state()
 
-    parallel = Parallel(prefer="threads", verbose=1)
+    parallel = Parallel(prefer="threads", n_jobs=n_jobs)
 
     n_vertices = data.shape[0]
     n_tasks = int(math.ceil(float(n_vertices) / chunk_size))
@@ -576,13 +573,13 @@ def nn_descent(
         n_neighbors,
         chunk_size,
         rng_state,
-        threads,
+        parallel,
         seed_per_row=seed_per_row,
     )
 
     if rp_tree_init:
         init_rp_tree(
-            data, dist, dist_args, current_graph, leaf_array, chunk_size, threads
+            data, dist, dist_args, current_graph, leaf_array, chunk_size, parallel
         )
 
     # store the updates in an array
@@ -606,7 +603,7 @@ def nn_descent(
             chunk_size,
             rng_state,
             rho,
-            threads,
+            parallel,
             seed_per_row=seed_per_row,
         )
 

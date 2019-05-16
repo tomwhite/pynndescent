@@ -467,7 +467,7 @@ class NNDescent(object):
         delta=0.001,
         rho=0.5,
         chunk_size=None,
-        threads=2,
+        n_jobs=None,
         seed_per_row=False,
         verbose=False,
     ):
@@ -542,7 +542,7 @@ class NNDescent(object):
                 rp_tree_init=self.tree_init,
                 leaf_array=leaf_array,
                 verbose=verbose,
-                threads=threads,
+                n_jobs=n_jobs,
                 seed_per_row=seed_per_row,
             )
         elif algorithm == "standard" or leaf_array.shape[0] == 1:
