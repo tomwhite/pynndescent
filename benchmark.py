@@ -64,7 +64,7 @@ def pynndescent_regular(X, threads=1, n_neighbors=25, max_candidates=50):
 
 def pynndescent_threaded(X, threads=1, n_neighbors=25, max_candidates=50):
     t0 = time.time()
-    index = NNDescent(X, n_neighbors=n_neighbors, max_candidates=max_candidates, tree_init=False, algorithm='threaded', chunk_size=X.shape[0]//threads, threads=threads)
+    index = NNDescent(X, n_neighbors=n_neighbors, max_candidates=max_candidates, tree_init=False, algorithm='threaded', chunk_size=X.shape[0]//threads, n_jobs=threads)
     indices, distances = index._neighbor_graph
     t1 = time.time()
     return indices, distances, t1-t0
