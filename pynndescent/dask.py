@@ -57,7 +57,7 @@ def from_bag(heap_bag):
     return np.hstack(heap_bag.compute())
 
 
-@numba.njit("i8(f8[:, :, :], f8[:, :], i8)", nogil=True)
+@numba.njit("i8(f8[:, :, :], f4[:, :], i8)", nogil=True)
 def apply_heap_updates_jit(heap, heap_updates, offset):
     c = 0
     for i in range(len(heap_updates)):
@@ -72,7 +72,7 @@ def apply_heap_updates_jit(heap, heap_updates, offset):
     return c
 
 
-@numba.njit("void(f8[:, :, :], f8[:, :, :], f8[:, :, :], f8[:, :], i8)", nogil=True)
+@numba.njit("void(f8[:, :, :], f8[:, :, :], f8[:, :, :], f4[:, :], i8)", nogil=True)
 def apply_new_and_old_heap_updates_jit(
     current_graph_part,
     new_candidate_neighbors,
@@ -140,7 +140,7 @@ def init_current_graph(data, data_shape, dist, dist_args, n_neighbors, chunk_siz
             # Each part has its own heap updates for the current graph, which
             # are combined in the reduce stage.
             max_heap_update_count = chunk_size * n_neighbors * 2
-            heap_updates_local = np.zeros((max_heap_update_count, 4))
+            heap_updates_local = np.zeros((max_heap_update_count, 4), dtype=np.float32)
             rows = chunk_rows(chunk_size, index, n_vertices)
             count = current_graph_map_jit(
                 rows,
@@ -194,7 +194,7 @@ def new_build_candidates(
             # Each part has its own heap updates for the current graph, which
             # are combined in the reduce stage.
             max_heap_update_count = chunk_size * n_neighbors * 2
-            heap_updates_local = np.zeros((max_heap_update_count, 5))
+            heap_updates_local = np.zeros((max_heap_update_count, 5), dtype=np.float32)
             rows = chunk_rows(chunk_size, index, n_vertices)
             offset = chunk_size * index
             count = candidates_map_jit(
@@ -290,7 +290,7 @@ def nn_descent(
                 # Each part has its own heap updates for the current graph, which
                 # are combined in the reduce stage.
                 max_heap_update_count = chunk_size * max_candidates * max_candidates * 4
-                heap_updates_local = np.zeros((max_heap_update_count, 4))
+                heap_updates_local = np.zeros((max_heap_update_count, 4), dtype=np.float32)
                 rows = chunk_rows(chunk_size, index, n_vertices)
                 offset = chunk_size * index
                 count = nn_descent_map_jit(
